@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io;
 
 use chrono::{DateTime, Local};
-use fatfs::{FileSystem, FsOptions};
+use ape_fatfs::{FileSystem, FsOptions};
 use fscommon::BufStream;
 
 fn format_file_size(size: u64) -> String {

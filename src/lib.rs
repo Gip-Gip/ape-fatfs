@@ -7,7 +7,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! fatfs = "0.4"
+//! ape_fatfs = "0.4"
 //! ```
 //!
 //! # Examples
@@ -21,7 +21,7 @@
 //!     let img_file = std::fs::OpenOptions::new().read(true).write(true)
 //!         .open("tmp/fat.img")?;
 //!     let buf_stream = fscommon::BufStream::new(img_file);
-//!     let fs = fatfs::FileSystem::new(buf_stream, fatfs::FsOptions::new())?;
+//!     let fs = ape_fatfs::FileSystem::new(buf_stream, ape_fatfs::FsOptions::new())?;
 //!     let root_dir = fs.root_dir();
 //!
 //!     // Write a file
@@ -41,23 +41,11 @@
 //! }
 //! ```
 
-#![crate_type = "lib"]
-#![crate_name = "fatfs"]
 #![cfg_attr(not(feature = "std"), no_std)]
 // Disable warnings to not clutter code with cfg too much
 #![cfg_attr(not(all(feature = "alloc", feature = "lfn")), allow(dead_code, unused_imports))]
-#![warn(clippy::pedantic)]
-#![allow(
-    clippy::module_name_repetitions,
-    clippy::cast_possible_truncation,
-    clippy::bool_to_int_with_if, // less readable
-    clippy::uninlined_format_args, // not supported before Rust 1.58.0
-)]
 
 extern crate log;
-
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
-extern crate alloc;
 
 #[macro_use]
 mod log_macros;

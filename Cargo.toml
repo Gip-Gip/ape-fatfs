@@ -1,8 +1,8 @@
 [package]
-name = "fatfs"
-version = "0.4.0"
-authors = ["Rafał Harabień <rafalh92@outlook.com>"]
-edition = "2018"
+name = "ape-fatfs"
+version = "0.1.0"
+authors = ["Rafał Harabień <rafalh92@outlook.com>", "Charles Thompson"]
+edition = "2021"
 repository = "https://github.com/rafalh/rust-fatfs"
 readme = "README.md"
 keywords = ["fat", "filesystem", "no_std"]

@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::io;
 
-use fatfs::{format_volume, FormatVolumeOptions, StdIoWrapper};
+use ape_fatfs::{format_volume, FormatVolumeOptions, StdIoWrapper};
 use fscommon::BufStream;
 
 fn main() -> io::Result<()> {
