@@ -1,6 +1,6 @@
 use std::{fs, io};
 
-use ape_fatfs::{FileSystem, FsOptions};
+use ape_fatfs::fs::{FileSystem, FsOptions};
 use fscommon::{BufStream, StreamSlice};
 
 fn main() -> io::Result<()> {

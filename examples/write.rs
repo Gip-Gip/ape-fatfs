@@ -1,7 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 
-use ape_fatfs::{FileSystem, FsOptions};
+use ape_fatfs::fs::{FileSystem, FsOptions};
 use fscommon::BufStream;
 
 fn main() -> io::Result<()> {

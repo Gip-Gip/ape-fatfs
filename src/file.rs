@@ -7,6 +7,9 @@ use crate::fs::{FileSystem, ReadWriteSeek};
 use crate::io::{IoBase, Read, Seek, SeekFrom, Write};
 use crate::time::{Date, DateTime, TimeProvider};
 
+#[cfg(not(no_std))]
+use crate::io::StdSeekPosWrapper;
+
 const MAX_FILE_SIZE: u32 = core::u32::MAX;
 
 /// A FAT filesystem file object used for reading and writing data.
@@ -311,7 +314,7 @@ impl<IO: ReadWriteSeek, TP: TimeProvider, OCC> Read for File<'_, IO, TP, OCC> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(no_std))]
 impl<IO: ReadWriteSeek, TP: TimeProvider, OCC> std::io::Read for File<'_, IO, TP, OCC>
 where
     std::io::Error: From<Error<IO::Error>>,
@@ -390,7 +393,7 @@ impl<IO: ReadWriteSeek, TP: TimeProvider, OCC> Write for File<'_, IO, TP, OCC> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(no_std))]
 impl<IO: ReadWriteSeek, TP: TimeProvider, OCC> std::io::Write for File<'_, IO, TP, OCC>
 where
     std::io::Error: From<Error<IO::Error>>,
@@ -473,12 +476,12 @@ impl<IO: ReadWriteSeek, TP, OCC> Seek for File<'_, IO, TP, OCC> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(test)]
 impl<IO: ReadWriteSeek, TP: TimeProvider, OCC> std::io::Seek for File<'_, IO, TP, OCC>
 where
     std::io::Error: From<Error<IO::Error>>,
 {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        Ok(Seek::seek(self, pos.into())?)
+        Ok(Seek::seek(self, StdSeekPosWrapper::from(pos).into())?)
     }
 }

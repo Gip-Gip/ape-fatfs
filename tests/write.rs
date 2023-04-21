@@ -4,7 +4,20 @@ use std::io::prelude::*;
 use std::mem;
 use std::str;
 
-use ape_fatfs::{DefaultTimeProvider, FsOptions, LossyOemCpConverter, StdIoWrapper};
+use ape_fatfs::{
+        time::DefaultTimeProvider,
+        fs::{
+            LossyOemCpConverter,
+            FileSystem,
+            FsOptions
+        },
+        io::{
+            Write,
+            Seek,
+            SeekFrom,
+            StdIoWrapper
+        }
+};
 use fscommon::BufStream;
 
 const FAT12_IMG: &str = "fat12.img";
@@ -15,7 +28,7 @@ const TMP_DIR: &str = "tmp";
 const TEST_STR: &str = "Hi there Rust programmer!\n";
 const TEST_STR2: &str = "Rust is cool!\n";
 
-type FileSystem = ape_fatfs::FileSystem<StdIoWrapper<BufStream<fs::File>>, DefaultTimeProvider, LossyOemCpConverter>;
+type TestFilesystem = FileSystem<StdIoWrapper<BufStream<fs::File>>, DefaultTimeProvider, LossyOemCpConverter>;
 
 fn call_with_tmp_img<F: Fn(&str) -> ()>(f: F, filename: &str, test_seq: u32) {
     let _ = env_logger::builder().is_test(true).try_init();
@@ -27,27 +40,27 @@ fn call_with_tmp_img<F: Fn(&str) -> ()>(f: F, filename: &str, test_seq: u32) {
     fs::remove_file(tmp_path).unwrap();
 }
 
-fn open_filesystem_rw(tmp_path: &str) -> FileSystem {
+fn open_TestFilesystem_rw(tmp_path: &str) -> TestFilesystem {
     let file = fs::OpenOptions::new().read(true).write(true).open(&tmp_path).unwrap();
     let buf_file = BufStream::new(file);
     let options = FsOptions::new().update_accessed_date(true);
-    FileSystem::new(buf_file, options).unwrap()
+    TestFilesystem::new(buf_file, options).unwrap()
 }
 
-fn call_with_fs<F: Fn(FileSystem) -> ()>(f: F, filename: &str, test_seq: u32) {
+fn call_with_fs<F: Fn(TestFilesystem) -> ()>(f: F, filename: &str, test_seq: u32) {
     let callback = |tmp_path: &str| {
-        let fs = open_filesystem_rw(tmp_path);
+        let fs = open_TestFilesystem_rw(tmp_path);
         f(fs);
     };
     call_with_tmp_img(&callback, filename, test_seq);
 }
 
-fn test_write_short_file(fs: FileSystem) {
+fn test_write_short_file(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     let mut file = root_dir.open_file("short.txt").expect("open file");
     file.truncate().unwrap();
     file.write_all(&TEST_STR.as_bytes()).unwrap();
-    file.seek(io::SeekFrom::Start(0)).unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
     assert_eq!(TEST_STR, str::from_utf8(&buf).unwrap());
@@ -68,19 +81,19 @@ fn test_write_file_fat32() {
     call_with_fs(test_write_short_file, FAT32_IMG, 1)
 }
 
-fn test_write_long_file(fs: FileSystem) {
+fn test_write_long_file(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     let mut file = root_dir.open_file("long.txt").expect("open file");
     file.truncate().unwrap();
     let test_str = TEST_STR.repeat(1000);
     file.write_all(&test_str.as_bytes()).unwrap();
-    file.seek(io::SeekFrom::Start(0)).unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
     assert_eq!(test_str, str::from_utf8(&buf).unwrap());
-    file.seek(io::SeekFrom::Start(1234)).unwrap();
+    file.seek(SeekFrom::Start(1234)).unwrap();
     file.truncate().unwrap();
-    file.seek(io::SeekFrom::Start(0)).unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
     buf.clear();
     file.read_to_end(&mut buf).unwrap();
     assert_eq!(&test_str[..1234], str::from_utf8(&buf).unwrap());
@@ -101,7 +114,7 @@ fn test_write_long_file_fat32() {
     call_with_fs(test_write_long_file, FAT32_IMG, 2)
 }
 
-fn test_remove(fs: FileSystem) {
+fn test_remove(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     assert!(root_dir.remove("very/long/path").is_err());
     let dir = root_dir.open_dir("very/long/path").unwrap();
@@ -134,7 +147,7 @@ fn test_remove_fat32() {
     call_with_fs(test_remove, FAT32_IMG, 3)
 }
 
-fn test_create_file(fs: FileSystem) {
+fn test_create_file(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     let dir = root_dir.open_dir("very/long/path").unwrap();
     let mut names = dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
@@ -201,7 +214,7 @@ fn test_create_file_fat32() {
     call_with_fs(test_create_file, FAT32_IMG, 4)
 }
 
-fn test_create_dir(fs: FileSystem) {
+fn test_create_dir(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     let parent_dir = root_dir.open_dir("very/long/path").unwrap();
     let mut names = parent_dir
@@ -273,7 +286,7 @@ fn test_create_dir_fat32() {
     call_with_fs(test_create_dir, FAT32_IMG, 5)
 }
 
-fn test_rename_file(fs: FileSystem) {
+fn test_rename_file(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     let parent_dir = root_dir.open_dir("very/long/path").unwrap();
     let entries = parent_dir.iter().map(|r| r.unwrap()).collect::<Vec<_>>();
@@ -337,21 +350,21 @@ fn test_rename_file_fat32() {
 }
 
 fn test_dirty_flag(tmp_path: &str) {
-    // Open filesystem, make change, and forget it - should become dirty
-    let fs = open_filesystem_rw(tmp_path);
+    // Open TestFilesystem, make change, and forget it - should become dirty
+    let fs = open_TestFilesystem_rw(tmp_path);
     let status_flags = fs.read_status_flags().unwrap();
     assert_eq!(status_flags.dirty(), false);
     assert_eq!(status_flags.io_error(), false);
     fs.root_dir().create_file("abc.txt").unwrap();
     mem::forget(fs);
     // Check if volume is dirty now
-    let fs = open_filesystem_rw(tmp_path);
+    let fs = open_TestFilesystem_rw(tmp_path);
     let status_flags = fs.read_status_flags().unwrap();
     assert_eq!(status_flags.dirty(), true);
     assert_eq!(status_flags.io_error(), false);
     fs.unmount().unwrap();
     // Make sure remounting does not clear the dirty flag
-    let fs = open_filesystem_rw(tmp_path);
+    let fs = open_TestFilesystem_rw(tmp_path);
     let status_flags = fs.read_status_flags().unwrap();
     assert_eq!(status_flags.dirty(), true);
     assert_eq!(status_flags.io_error(), false);
@@ -372,7 +385,7 @@ fn test_dirty_flag_fat32() {
     call_with_tmp_img(test_dirty_flag, FAT32_IMG, 7)
 }
 
-fn test_multiple_files_in_directory(fs: FileSystem) {
+fn test_multiple_files_in_directory(fs: TestFilesystem) {
     let dir = fs.root_dir().create_dir("/TMP").unwrap();
     for i in 0..8 {
         let name = format!("T{}.TXT", i);

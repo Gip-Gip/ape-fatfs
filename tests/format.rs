@@ -1,19 +1,30 @@
 use std::io;
 use std::io::prelude::*;
 
-use ape_fatfs::{DefaultTimeProvider, LossyOemCpConverter, StdIoWrapper};
+use ape_fatfs::{
+        time::DefaultTimeProvider,
+        fs::{
+            self,
+            LossyOemCpConverter,
+            FileSystem,
+            FatType,
+            FormatVolumeOptions,
+            FsOptions
+        },
+        io::*,
+};
 use fscommon::BufStream;
 
 const KB: u64 = 1024;
 const MB: u64 = KB * 1024;
 const TEST_STR: &str = "Hi there Rust programmer!\n";
 
-type FileSystem =
-    ape_fatfs::FileSystem<StdIoWrapper<BufStream<io::Cursor<Vec<u8>>>>, DefaultTimeProvider, LossyOemCpConverter>;
+type TestFileSystem =
+    FileSystem<StdIoWrapper<BufStream<io::Cursor<Vec<u8>>>>, DefaultTimeProvider, LossyOemCpConverter>;
 
-fn basic_fs_test(fs: &FileSystem) {
+fn basic_fs_test(fs: &TestFileSystem) {
     let stats = fs.stats().expect("stats");
-    if fs.fat_type() == ape_fatfs::FatType::Fat32 {
+    if fs.fat_type() == FatType::Fat32 {
         // On FAT32 one cluster is allocated for root directory
         assert_eq!(stats.total_clusters(), stats.free_clusters() + 1);
     } else {
@@ -60,15 +71,15 @@ fn basic_fs_test(fs: &FileSystem) {
     assert_eq!(filenames, ["subdir1", "new-name.txt"]);
 }
 
-fn test_format_fs(opts: ape_fatfs::FormatVolumeOptions, total_bytes: u64) -> FileSystem {
+fn test_format_fs(opts: FormatVolumeOptions, total_bytes: u64) -> TestFileSystem {
     let _ = env_logger::builder().is_test(true).try_init();
     // Init storage to 0xD1 bytes (value has been choosen to be parsed as normal file)
     let storage_vec: Vec<u8> = vec![0xD1_u8; total_bytes as usize];
     let storage_cur = io::Cursor::new(storage_vec);
-    let mut buffered_stream = ape_fatfs::StdIoWrapper::from(BufStream::new(storage_cur));
-    ape_fatfs::format_volume(&mut buffered_stream, opts).expect("format volume");
+    let mut buffered_stream = StdIoWrapper::from(BufStream::new(storage_cur));
+    fs::format_volume(&mut buffered_stream, opts).expect("format volume");
 
-    let fs = ape_fatfs::FileSystem::new(buffered_stream, ape_fatfs::FsOptions::new()).expect("open fs");
+    let fs = TestFileSystem::new(buffered_stream, FsOptions::new()).expect("open fs");
     basic_fs_test(&fs);
     fs
 }
@@ -76,47 +87,47 @@ fn test_format_fs(opts: ape_fatfs::FormatVolumeOptions, total_bytes: u64) -> Fil
 #[test]
 fn test_format_1mb() {
     let total_bytes = MB;
-    let opts = ape_fatfs::FormatVolumeOptions::new();
+    let opts = FormatVolumeOptions::new();
     let fs = test_format_fs(opts, total_bytes);
-    assert_eq!(fs.fat_type(), ape_fatfs::FatType::Fat12);
+    assert_eq!(fs.fat_type(), FatType::Fat12);
 }
 
 #[test]
 fn test_format_8mb_1fat() {
     let total_bytes = 8 * MB;
-    let opts = ape_fatfs::FormatVolumeOptions::new().fats(1);
+    let opts = FormatVolumeOptions::new().fats(1);
     let fs = test_format_fs(opts, total_bytes);
-    assert_eq!(fs.fat_type(), ape_fatfs::FatType::Fat16);
+    assert_eq!(fs.fat_type(), FatType::Fat16);
 }
 
 #[test]
 fn test_format_50mb() {
     let total_bytes = 50 * MB;
-    let opts = ape_fatfs::FormatVolumeOptions::new();
+    let opts = FormatVolumeOptions::new();
     let fs = test_format_fs(opts, total_bytes);
-    assert_eq!(fs.fat_type(), ape_fatfs::FatType::Fat16);
+    assert_eq!(fs.fat_type(), FatType::Fat16);
 }
 
 #[test]
 fn test_format_2gb_512sec() {
     let total_bytes = 2 * 1024 * MB;
-    let opts = ape_fatfs::FormatVolumeOptions::new();
+    let opts = FormatVolumeOptions::new();
     let fs = test_format_fs(opts, total_bytes);
-    assert_eq!(fs.fat_type(), ape_fatfs::FatType::Fat32);
+    assert_eq!(fs.fat_type(), FatType::Fat32);
 }
 
 #[test]
 fn test_format_1gb_4096sec() {
     let total_bytes = 1024 * MB;
-    let opts = ape_fatfs::FormatVolumeOptions::new().bytes_per_sector(4096);
+    let opts = FormatVolumeOptions::new().bytes_per_sector(4096);
     let fs = test_format_fs(opts, total_bytes);
-    assert_eq!(fs.fat_type(), ape_fatfs::FatType::Fat32);
+    assert_eq!(fs.fat_type(), FatType::Fat32);
 }
 
 #[test]
 fn test_format_empty_volume_label() {
     let total_bytes = 2 * 1024 * MB;
-    let opts = ape_fatfs::FormatVolumeOptions::new();
+    let opts = FormatVolumeOptions::new();
     let fs = test_format_fs(opts, total_bytes);
     assert_eq!(fs.volume_label(), "NO NAME");
     assert_eq!(fs.read_volume_label_from_root_dir().unwrap(), None);
@@ -125,7 +136,7 @@ fn test_format_empty_volume_label() {
 #[test]
 fn test_format_volume_label_and_id() {
     let total_bytes = 2 * 1024 * MB;
-    let opts = ape_fatfs::FormatVolumeOptions::new()
+    let opts = FormatVolumeOptions::new()
         .volume_id(1234)
         .volume_label(*b"VOLUMELABEL");
     let fs = test_format_fs(opts, total_bytes);

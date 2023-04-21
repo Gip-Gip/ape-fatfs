@@ -1,5 +1,3 @@
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
-use alloc::string::String;
 use bitflags::bitflags;
 use core::char;
 use core::convert::TryInto;
@@ -11,7 +9,7 @@ use core::str;
 #[cfg(feature = "lfn")]
 use crate::dir::LfnBuffer;
 use crate::dir::{Dir, DirRawStream};
-use crate::error::{Error, IoError};
+use crate::error::{Error, IoError, ReadExactError};
 use crate::file::File;
 use crate::fs::{FatType, FileSystem, OemCpConverter, ReadWriteSeek};
 use crate::io::{self, Read, ReadLeExt, Write, WriteLeExt};
@@ -375,17 +373,18 @@ impl DirEntryData {
         }
     }
 
-    pub(crate) fn deserialize<E: IoError, R: Read<Error = Error<E>>>(rdr: &mut R) -> Result<Self, Error<E>> {
+    pub(crate) fn deserialize<E: IoError, R: Read<Error = Error<E>>>(rdr: &mut R) -> Result<Self, Error<E>>
+    where R::Error: From<ReadExactError<R::Error>> {
         trace!("DirEntryData::deserialize");
         let mut name = [0; SFN_SIZE];
         match rdr.read_exact(&mut name) {
-            Err(Error::UnexpectedEof) => {
+            Err(ReadExactError::UnexpectedEof) => {
                 // entries can occupy all clusters of directory so there is no zero entry at the end
                 // handle it here by returning non-existing empty entry
                 return Ok(DirEntryData::File(DirFileEntryData::default()));
             }
             Err(err) => {
-                return Err(err);
+                return Err(err.into());
             }
             Ok(_) => {}
         }

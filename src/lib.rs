@@ -7,13 +7,19 @@
 //!
 //! ```toml
 //! [dependencies]
-//! ape_fatfs = "0.4"
+//! ape_fatfs = "0.1.0"
 //! ```
 //!
 //! # Examples
 //!
 //! ```rust
 //! use std::io::prelude::*;
+//! use ape_fatfs::{
+//!     fs::{
+//!         FsOptions,
+//!         FileSystem,
+//!     }
+//! };
 //!
 //! fn main() -> std::io::Result<()> {
 //!     # std::fs::copy("resources/fat16.img", "tmp/fat.img")?;
@@ -21,7 +27,7 @@
 //!     let img_file = std::fs::OpenOptions::new().read(true).write(true)
 //!         .open("tmp/fat.img")?;
 //!     let buf_stream = fscommon::BufStream::new(img_file);
-//!     let fs = ape_fatfs::FileSystem::new(buf_stream, ape_fatfs::FsOptions::new())?;
+//!     let fs = FileSystem::new(buf_stream, FsOptions::new())?;
 //!     let root_dir = fs.root_dir();
 //!
 //!     // Write a file
@@ -50,20 +56,13 @@ extern crate log;
 #[macro_use]
 mod log_macros;
 
-mod boot_sector;
-mod dir;
-mod dir_entry;
-mod error;
-mod file;
-mod fs;
-mod io;
-mod table;
-mod time;
+pub mod boot_sector;
+pub mod dir;
+pub mod dir_entry;
+pub mod error;
+pub mod file;
+pub mod fs;
+pub mod io;
+pub mod table;
+pub mod time;
 
-pub use crate::dir::*;
-pub use crate::dir_entry::*;
-pub use crate::error::*;
-pub use crate::file::*;
-pub use crate::fs::*;
-pub use crate::io::*;
-pub use crate::time::*;
