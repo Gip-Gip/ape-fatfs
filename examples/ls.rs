@@ -2,8 +2,8 @@ use std::env;
 use std::fs::File;
 use std::io;
 
-use chrono::{DateTime, Local};
 use ape_fatfs::fs::{FileSystem, FsOptions};
+use chrono::{DateTime, Local};
 use fscommon::BufStream;
 
 fn format_file_size(size: u64) -> String {
@@ -36,7 +36,12 @@ fn main() -> io::Result<()> {
         let modified = DateTime::<Local>::from(e.modified())
             .format("%Y-%m-%d %H:%M:%S")
             .to_string();
-        println!("{:4}  {}  {}", format_file_size(e.len()), modified, e.file_name());
+        println!(
+            "{:4}  {}  {}",
+            format_file_size(e.len()),
+            modified,
+            e.file_name()
+        );
     }
     Ok(())
 }

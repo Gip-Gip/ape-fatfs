@@ -6,7 +6,8 @@ use core::str;
 use core::{iter, slice};
 
 use crate::dir_entry::{
-    DirEntry, DirEntryData, DirFileEntryData, DirLfnEntryData, FileAttributes, ShortName, DIR_ENTRY_SIZE,
+    DirEntry, DirEntryData, DirFileEntryData, DirLfnEntryData, FileAttributes, ShortName,
+    DIR_ENTRY_SIZE,
 };
 #[cfg(feature = "lfn")]
 use crate::dir_entry::{LFN_ENTRY_LAST_FLAG, LFN_PART_LEN};
@@ -109,7 +110,10 @@ pub struct Dir<'a, IO: ReadWriteSeek, TP, OCC> {
 }
 
 impl<'a, IO: ReadWriteSeek, TP, OCC> Dir<'a, IO, TP, OCC> {
-    pub(crate) fn new(stream: DirRawStream<'a, IO, TP, OCC>, fs: &'a FileSystem<IO, TP, OCC>) -> Self {
+    pub(crate) fn new(
+        stream: DirRawStream<'a, IO, TP, OCC>,
+        fs: &'a FileSystem<IO, TP, OCC>,
+    ) -> Self {
         Dir { stream, fs }
     }
 
@@ -152,7 +156,9 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
     }
 
     #[allow(clippy::type_complexity)]
-    pub(crate) fn find_volume_entry(&self) -> Result<Option<DirEntry<'a, IO, TP, OCC>>, Error<IO::Error>> {
+    pub(crate) fn find_volume_entry(
+        &self,
+    ) -> Result<Option<DirEntry<'a, IO, TP, OCC>>, Error<IO::Error>> {
         for r in DirIter::new(self.stream.clone(), self.fs, false) {
             let e = r?;
             if e.data.is_volume() {
@@ -253,14 +259,18 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
         // traverse path
         let (name, rest_opt) = split_path(path);
         if let Some(rest) = rest_opt {
-            return self.find_entry(name, Some(true), None)?.to_dir().create_file(rest);
+            return self
+                .find_entry(name, Some(true), None)?
+                .to_dir()
+                .create_file(rest);
         }
         // this is final filename in the path
         let r = self.check_for_existence(name, Some(false))?;
         match r {
             // file does not exist - create it
             DirEntryOrShortName::ShortName(short_name) => {
-                let sfn_entry = self.create_sfn_entry(short_name, FileAttributes::from_bits_truncate(0), None);
+                let sfn_entry =
+                    self.create_sfn_entry(short_name, FileAttributes::from_bits_truncate(0), None);
                 Ok(self.write_entry(name, sfn_entry)?.to_file())
             }
             // file already exists - return it
@@ -286,7 +296,10 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
         // traverse path
         let (name, rest_opt) = split_path(path);
         if let Some(rest) = rest_opt {
-            return self.find_entry(name, Some(true), None)?.to_dir().create_dir(rest);
+            return self
+                .find_entry(name, Some(true), None)?
+                .to_dir()
+                .create_dir(rest);
         }
         // this is final filename in the path
         let r = self.check_for_existence(name, Some(true))?;
@@ -296,16 +309,24 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
                 // alloc cluster for directory data
                 let cluster = self.fs.alloc_cluster(None, true)?;
                 // create entry in parent directory
-                let sfn_entry = self.create_sfn_entry(short_name, FileAttributes::DIRECTORY, Some(cluster));
+                let sfn_entry =
+                    self.create_sfn_entry(short_name, FileAttributes::DIRECTORY, Some(cluster));
                 let entry = self.write_entry(name, sfn_entry)?;
                 let dir = entry.to_dir();
                 // create special entries "." and ".."
                 let dot_sfn = ShortNameGenerator::generate_dot();
-                let sfn_entry = self.create_sfn_entry(dot_sfn, FileAttributes::DIRECTORY, entry.first_cluster());
+                let sfn_entry = self.create_sfn_entry(
+                    dot_sfn,
+                    FileAttributes::DIRECTORY,
+                    entry.first_cluster(),
+                );
                 dir.write_entry(".", sfn_entry)?;
                 let dotdot_sfn = ShortNameGenerator::generate_dotdot();
-                let sfn_entry =
-                    self.create_sfn_entry(dotdot_sfn, FileAttributes::DIRECTORY, self.stream.first_cluster());
+                let sfn_entry = self.create_sfn_entry(
+                    dotdot_sfn,
+                    FileAttributes::DIRECTORY,
+                    self.stream.first_cluster(),
+                );
                 dir.write_entry("..", sfn_entry)?;
                 Ok(dir)
             }
@@ -389,7 +410,12 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
     ///   stripped from the last component does not point to an existing directory.
     /// * `Error::AlreadyExists` will be returned if `dst_path` points to an existing directory entry.
     /// * `Error::Io` will be returned if the underlying storage object returned an I/O error.
-    pub fn rename(&self, src_path: &str, dst_dir: &Dir<IO, TP, OCC>, dst_path: &str) -> Result<(), Error<IO::Error>> {
+    pub fn rename(
+        &self,
+        src_path: &str,
+        dst_dir: &Dir<IO, TP, OCC>,
+        dst_path: &str,
+    ) -> Result<(), Error<IO::Error>> {
         trace!("Dir::rename {} {}", src_path, dst_path);
         // traverse source path
         let (src_name, src_rest_opt) = split_path(src_path);
@@ -449,7 +475,10 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
         Ok(())
     }
 
-    fn find_free_entries(&self, num_entries: u32) -> Result<DirRawStream<'a, IO, TP, OCC>, Error<IO::Error>> {
+    fn find_free_entries(
+        &self,
+        num_entries: u32,
+    ) -> Result<DirRawStream<'a, IO, TP, OCC>, Error<IO::Error>> {
         let mut stream = self.stream.clone();
         let mut first_free: u32 = 0;
         let mut num_free: u32 = 0;
@@ -540,7 +569,8 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
         // convert long name to UTF-16
         let lfn_utf16 = Self::encode_lfn_utf16(name);
         // write LFN entries
-        let (mut stream, start_pos) = self.alloc_and_write_lfn_entries(&lfn_utf16, raw_entry.name())?;
+        let (mut stream, start_pos) =
+            self.alloc_and_write_lfn_entries(&lfn_utf16, raw_entry.name())?;
         // write short name entry
         raw_entry.serialize(&mut stream)?;
         // Get position directory stream after entries were written
@@ -588,7 +618,11 @@ pub struct DirIter<'a, IO: ReadWriteSeek, TP, OCC> {
 }
 
 impl<'a, IO: ReadWriteSeek, TP, OCC> DirIter<'a, IO, TP, OCC> {
-    fn new(stream: DirRawStream<'a, IO, TP, OCC>, fs: &'a FileSystem<IO, TP, OCC>, skip_volume: bool) -> Self {
+    fn new(
+        stream: DirRawStream<'a, IO, TP, OCC>,
+        fs: &'a FileSystem<IO, TP, OCC>,
+        skip_volume: bool,
+    ) -> Self {
         DirIter {
             stream,
             fs,
@@ -917,7 +951,10 @@ impl LongNameBuilder {
         }
         let chksum = lfn_checksum(short_name);
         if chksum != self.chksum {
-            warn!("checksum mismatch {:x} {:x} {:?}", chksum, self.chksum, short_name);
+            warn!(
+                "checksum mismatch {:x} {:x} {:?}",
+                chksum, self.chksum, short_name
+            );
             self.clear();
         }
     }
@@ -1055,10 +1092,12 @@ impl ShortNameGenerator {
         let (basename_len, basename_fits, basename_lossy) =
             Self::copy_short_name_part(&mut short_name[0..8], basename_src);
         // copy file extension if exists
-        let (name_fits, lossy_conv) = dot_index_opt.map_or((basename_fits, basename_lossy), |dot_index| {
-            let (_, ext_fits, ext_lossy) = Self::copy_short_name_part(&mut short_name[8..11], &name[dot_index + 1..]);
-            (basename_fits && ext_fits, basename_lossy || ext_lossy)
-        });
+        let (name_fits, lossy_conv) =
+            dot_index_opt.map_or((basename_fits, basename_lossy), |dot_index| {
+                let (_, ext_fits, ext_lossy) =
+                    Self::copy_short_name_part(&mut short_name[8..11], &name[dot_index + 1..]);
+                (basename_fits && ext_fits, basename_lossy || ext_lossy)
+            });
         let chksum = Self::checksum(name);
         Self {
             chksum,
@@ -1134,7 +1173,8 @@ impl ShortNameGenerator {
             return;
         }
         if let Some(num_suffix) = char::from(short_name[long_prefix_len + 1]).to_digit(10) {
-            let long_prefix_matches = short_name[..long_prefix_len] == self.short_name[..long_prefix_len];
+            let long_prefix_matches =
+                short_name[..long_prefix_len] == self.short_name[..long_prefix_len];
             let ext_matches = short_name[8..] == self.short_name[8..];
             if long_prefix_matches && ext_matches {
                 self.long_prefix_bitmap |= 1 << num_suffix;
@@ -1149,11 +1189,13 @@ impl ShortNameGenerator {
             return;
         }
         if let Some(num_suffix) = char::from(short_name[short_prefix_len + 4 + 1]).to_digit(10) {
-            let short_prefix_matches = short_name[..short_prefix_len] == self.short_name[..short_prefix_len];
+            let short_prefix_matches =
+                short_name[..short_prefix_len] == self.short_name[..short_prefix_len];
             let ext_matches = short_name[8..] == self.short_name[8..];
             if short_prefix_matches && ext_matches {
-                let chksum_res = str::from_utf8(&short_name[short_prefix_len..short_prefix_len + 4])
-                    .map(|s| u16::from_str_radix(s, 16));
+                let chksum_res =
+                    str::from_utf8(&short_name[short_prefix_len..short_prefix_len + 4])
+                        .map(|s| u16::from_str_radix(s, 16));
                 if chksum_res == Ok(Ok(self.chksum)) {
                     self.prefix_chksum_bitmap |= 1 << num_suffix;
                 }
@@ -1246,8 +1288,14 @@ mod tests {
 
     #[test]
     fn test_generate_short_name() {
-        assert_eq!(ShortNameGenerator::new("Foo").generate().ok(), Some(*b"FOO        "));
-        assert_eq!(ShortNameGenerator::new("Foo.b").generate().ok(), Some(*b"FOO     B  "));
+        assert_eq!(
+            ShortNameGenerator::new("Foo").generate().ok(),
+            Some(*b"FOO        ")
+        );
+        assert_eq!(
+            ShortNameGenerator::new("Foo.b").generate().ok(),
+            Some(*b"FOO     B  ")
+        );
         assert_eq!(
             ShortNameGenerator::new("Foo.baR").generate().ok(),
             Some(*b"FOO     BAR")
@@ -1264,7 +1312,10 @@ mod tests {
             ShortNameGenerator::new(".bashrc.swp").generate().ok(),
             Some(*b"BASHRC~1SWP")
         );
-        assert_eq!(ShortNameGenerator::new(".foo").generate().ok(), Some(*b"FOO~1      "));
+        assert_eq!(
+            ShortNameGenerator::new(".foo").generate().ok(),
+            Some(*b"FOO~1      ")
+        );
     }
 
     #[test]
@@ -1274,7 +1325,9 @@ mod tests {
 
     #[test]
     fn test_lfn_checksum_overflow() {
-        lfn_checksum(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+        lfn_checksum(&[
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        ]);
     }
 
     #[test]

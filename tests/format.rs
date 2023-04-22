@@ -2,16 +2,9 @@ use std::io;
 use std::io::prelude::*;
 
 use ape_fatfs::{
-        time::DefaultTimeProvider,
-        fs::{
-            self,
-            LossyOemCpConverter,
-            FileSystem,
-            FatType,
-            FormatVolumeOptions,
-            FsOptions
-        },
-        io::*,
+    fs::{self, FatType, FileSystem, FormatVolumeOptions, FsOptions, LossyOemCpConverter},
+    io::*,
+    time::DefaultTimeProvider,
 };
 use fscommon::BufStream;
 
@@ -19,8 +12,11 @@ const KB: u64 = 1024;
 const MB: u64 = KB * 1024;
 const TEST_STR: &str = "Hi there Rust programmer!\n";
 
-type TestFileSystem =
-    FileSystem<StdIoWrapper<BufStream<io::Cursor<Vec<u8>>>>, DefaultTimeProvider, LossyOemCpConverter>;
+type TestFileSystem = FileSystem<
+    StdIoWrapper<BufStream<io::Cursor<Vec<u8>>>>,
+    DefaultTimeProvider,
+    LossyOemCpConverter,
+>;
 
 fn basic_fs_test(fs: &TestFileSystem) {
     let stats = fs.stats().expect("stats");
@@ -42,7 +38,9 @@ fn basic_fs_test(fs: &TestFileSystem) {
 
     let test_str = TEST_STR.repeat(1000);
     {
-        let mut file = subdir2.create_file("test file name.txt").expect("create file");
+        let mut file = subdir2
+            .create_file("test file name.txt")
+            .expect("create file");
         file.truncate().expect("truncate file");
         file.write_all(test_str.as_bytes()).expect("write file");
     }
@@ -54,20 +52,36 @@ fn basic_fs_test(fs: &TestFileSystem) {
     file.read_to_string(&mut content).expect("read_to_string");
     assert_eq!(content, test_str);
 
-    let filenames = root_dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let filenames = root_dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(filenames, ["subdir1"]);
 
-    let filenames = subdir2.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let filenames = subdir2
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(filenames, [".", "..", "test file name.txt"]);
 
     subdir1
-        .rename("subdir2 with long name/test file name.txt", &root_dir, "new-name.txt")
+        .rename(
+            "subdir2 with long name/test file name.txt",
+            &root_dir,
+            "new-name.txt",
+        )
         .expect("rename");
 
-    let filenames = subdir2.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let filenames = subdir2
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(filenames, [".", ".."]);
 
-    let filenames = root_dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let filenames = root_dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(filenames, ["subdir1", "new-name.txt"]);
 }
 

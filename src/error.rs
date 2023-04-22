@@ -1,8 +1,8 @@
-pub use embedded_io::Error as IoError;
-pub use embedded_io::Io as IoBase;
-pub use embedded_io::ErrorKind;
-pub use embedded_io::blocking::{ReadExactError};
 use core::fmt::Debug;
+pub use embedded_io::blocking::ReadExactError;
+pub use embedded_io::Error as IoError;
+pub use embedded_io::ErrorKind;
+pub use embedded_io::Io as IoBase;
 
 use crate::io::StdErrWrapper;
 
@@ -66,12 +66,14 @@ impl<T: IoError> From<ReadExactError<T>> for Error<T> {
     }
 }
 
-#[cfg(not(no_std))]
+#[cfg(feature = "std")]
 impl From<Error<StdErrWrapper>> for std::io::Error {
     fn from(error: Error<StdErrWrapper>) -> Self {
         match error {
             Error::Io(io_error) => io_error.into(),
-            Error::UnexpectedEof | Error::NotEnoughSpace => Self::new(std::io::ErrorKind::UnexpectedEof, error),
+            Error::UnexpectedEof | Error::NotEnoughSpace => {
+                Self::new(std::io::ErrorKind::UnexpectedEof, error)
+            }
             Error::WriteZero => Self::new(std::io::ErrorKind::WriteZero, error),
             Error::InvalidInput
             | Error::InvalidFileNameLength
@@ -102,7 +104,7 @@ impl<T: core::fmt::Display> core::fmt::Display for Error<T> {
     }
 }
 
-#[cfg(not(no_std))]
+#[cfg(feature = "std")]
 impl<T: std::error::Error + 'static> std::error::Error for Error<T> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         if let Error::Io(io_error) = self {
@@ -113,14 +115,14 @@ impl<T: std::error::Error + 'static> std::error::Error for Error<T> {
     }
 }
 
-#[cfg(not(no_std))]
+#[cfg(feature = "std")]
 impl core::fmt::Display for StdErrWrapper {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "pls implement")
     }
 }
 
-#[cfg(not(no_std))]
+#[cfg(feature = "std")]
 impl std::error::Error for StdErrWrapper {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         None

@@ -365,7 +365,10 @@ pub(crate) enum DirEntryData {
 }
 
 impl DirEntryData {
-    pub(crate) fn serialize<E: IoError, W: Write<Error = Error<E>>>(&self, wrt: &mut W) -> Result<(), Error<E>> {
+    pub(crate) fn serialize<E: IoError, W: Write<Error = Error<E>>>(
+        &self,
+        wrt: &mut W,
+    ) -> Result<(), Error<E>> {
         trace!("DirEntryData::serialize");
         match self {
             DirEntryData::File(file) => file.serialize(wrt),
@@ -373,8 +376,12 @@ impl DirEntryData {
         }
     }
 
-    pub(crate) fn deserialize<E: IoError, R: Read<Error = Error<E>>>(rdr: &mut R) -> Result<Self, Error<E>>
-    where R::Error: From<ReadExactError<R::Error>> {
+    pub(crate) fn deserialize<E: IoError, R: Read<Error = Error<E>>>(
+        rdr: &mut R,
+    ) -> Result<Self, Error<E>>
+    where
+        R::Error: From<ReadExactError<R::Error>>,
+    {
         trace!("DirEntryData::deserialize");
         let mut name = [0; SFN_SIZE];
         match rdr.read_exact(&mut name) {
@@ -512,7 +519,10 @@ impl DirEntryEditor {
         }
     }
 
-    pub(crate) fn flush<IO: ReadWriteSeek, TP, OCC>(&mut self, fs: &FileSystem<IO, TP, OCC>) -> Result<(), IO::Error> {
+    pub(crate) fn flush<IO: ReadWriteSeek, TP, OCC>(
+        &mut self,
+        fs: &FileSystem<IO, TP, OCC>,
+    ) -> Result<(), IO::Error> {
         if self.dirty {
             self.write(fs)?;
             self.dirty = false;
@@ -520,7 +530,10 @@ impl DirEntryEditor {
         Ok(())
     }
 
-    fn write<IO: ReadWriteSeek, TP, OCC>(&self, fs: &FileSystem<IO, TP, OCC>) -> Result<(), IO::Error> {
+    fn write<IO: ReadWriteSeek, TP, OCC>(
+        &self,
+        fs: &FileSystem<IO, TP, OCC>,
+    ) -> Result<(), IO::Error> {
         let mut disk = fs.disk.borrow_mut();
         disk.seek(io::SeekFrom::Start(self.pos))?;
         self.data.serialize(&mut *disk)
@@ -585,7 +598,9 @@ impl<'a, IO: ReadWriteSeek, TP, OCC: OemCpConverter> DirEntry<'a, IO, TP, OCC> {
             }
         }
 
-        self.data.lowercase_name().to_string(&self.fs.options.oem_cp_converter)
+        self.data
+            .lowercase_name()
+            .to_string(&self.fs.options.oem_cp_converter)
     }
 
     /// Returns file attributes.
@@ -712,7 +727,8 @@ impl<'a, IO: ReadWriteSeek, TP, OCC: OemCpConverter> DirEntry<'a, IO, TP, OCC> {
             }
         }
 
-        self.short_name.eq_ignore_case(name, &self.fs.options.oem_cp_converter)
+        self.short_name
+            .eq_ignore_case(name, &self.fs.options.oem_cp_converter)
     }
 }
 
@@ -730,28 +746,43 @@ mod tests {
     #[test]
     fn short_name_with_ext() {
         let oem_cp_conv = LossyOemCpConverter::new();
-        assert_eq!(ShortName::new(b"FOO     BAR").to_string(&oem_cp_conv), "FOO.BAR");
-        assert_eq!(ShortName::new(b"LOOK AT M E").to_string(&oem_cp_conv), "LOOK AT.M E");
+        assert_eq!(
+            ShortName::new(b"FOO     BAR").to_string(&oem_cp_conv),
+            "FOO.BAR"
+        );
+        assert_eq!(
+            ShortName::new(b"LOOK AT M E").to_string(&oem_cp_conv),
+            "LOOK AT.M E"
+        );
         assert_eq!(
             ShortName::new(b"\x99OOK AT M \x99").to_string(&oem_cp_conv),
             "\u{FFFD}OOK AT.M \u{FFFD}"
         );
-        assert!(ShortName::new(b"\x99OOK AT M \x99").eq_ignore_case("\u{FFFD}OOK AT.M \u{FFFD}", &oem_cp_conv));
+        assert!(ShortName::new(b"\x99OOK AT M \x99")
+            .eq_ignore_case("\u{FFFD}OOK AT.M \u{FFFD}", &oem_cp_conv));
     }
 
     #[test]
     fn short_name_without_ext() {
         let oem_cp_conv = LossyOemCpConverter::new();
-        assert_eq!(ShortName::new(b"FOO        ").to_string(&oem_cp_conv), "FOO");
-        assert_eq!(ShortName::new(&b"LOOK AT    ").to_string(&oem_cp_conv), "LOOK AT");
+        assert_eq!(
+            ShortName::new(b"FOO        ").to_string(&oem_cp_conv),
+            "FOO"
+        );
+        assert_eq!(
+            ShortName::new(&b"LOOK AT    ").to_string(&oem_cp_conv),
+            "LOOK AT"
+        );
     }
 
     #[test]
     fn short_name_eq_ignore_case() {
         let oem_cp_conv = LossyOemCpConverter::new();
         let raw_short_name: &[u8; SFN_SIZE] = b"\x99OOK AT M \x99";
-        assert!(ShortName::new(raw_short_name).eq_ignore_case("\u{FFFD}OOK AT.M \u{FFFD}", &oem_cp_conv));
-        assert!(ShortName::new(raw_short_name).eq_ignore_case("\u{FFFD}ook AT.m \u{FFFD}", &oem_cp_conv));
+        assert!(ShortName::new(raw_short_name)
+            .eq_ignore_case("\u{FFFD}OOK AT.M \u{FFFD}", &oem_cp_conv));
+        assert!(ShortName::new(raw_short_name)
+            .eq_ignore_case("\u{FFFD}ook AT.m \u{FFFD}", &oem_cp_conv));
     }
 
     #[test]

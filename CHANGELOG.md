@@ -1,6 +1,16 @@
 Changelog
 =========
 
+# ape-fatfs
+
+## 0.1.0
+
+ * **Ported to Rust 2022** *(commit 6942ef6)*
+ * **Ported to use embedded_io** *(commit da40ab0)*
+
+# rust-fatfs versions <= 0.4.0
+### (retained for archival purposes)
+
 0.4.0 (not released yet)
 ------------------------
 New features:

@@ -1,21 +1,10 @@
 use std::fs;
-use std::io::prelude::*;
 use std::str;
 
 use ape_fatfs::{
-        time::DefaultTimeProvider,
-        fs::{
-            LossyOemCpConverter,
-            FileSystem,
-            FatType,
-            FsOptions
-        },
-        io::{
-            Read,
-            Seek,
-            SeekFrom,
-            StdIoWrapper
-        },
+    fs::{FatType, FileSystem, FsOptions, LossyOemCpConverter},
+    io::{Read, Seek, SeekFrom, StdIoWrapper},
+    time::DefaultTimeProvider,
 };
 use fscommon::BufStream;
 
@@ -24,7 +13,8 @@ const FAT12_IMG: &str = "resources/fat12.img";
 const FAT16_IMG: &str = "resources/fat16.img";
 const FAT32_IMG: &str = "resources/fat32.img";
 
-type TestFilesystem = FileSystem<StdIoWrapper<BufStream<fs::File>>, DefaultTimeProvider, LossyOemCpConverter>;
+type TestFilesystem =
+    FileSystem<StdIoWrapper<BufStream<fs::File>>, DefaultTimeProvider, LossyOemCpConverter>;
 
 fn call_with_fs<F: Fn(TestFilesystem) -> ()>(f: F, filename: &str) {
     let _ = env_logger::builder().is_test(true).try_init();
@@ -37,12 +27,24 @@ fn call_with_fs<F: Fn(TestFilesystem) -> ()>(f: F, filename: &str) {
 fn test_root_dir(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     let entries = root_dir.iter().map(|r| r.unwrap()).collect::<Vec<_>>();
-    let short_names = entries.iter().map(|e| e.short_file_name()).collect::<Vec<String>>();
+    let short_names = entries
+        .iter()
+        .map(|e| e.short_file_name())
+        .collect::<Vec<String>>();
     assert_eq!(short_names, ["LONG.TXT", "SHORT.TXT", "VERY", "VERY-L~1"]);
-    let names = entries.iter().map(|e| e.file_name()).collect::<Vec<String>>();
-    assert_eq!(names, ["long.txt", "short.txt", "very", "very-long-dir-name"]);
+    let names = entries
+        .iter()
+        .map(|e| e.file_name())
+        .collect::<Vec<String>>();
+    assert_eq!(
+        names,
+        ["long.txt", "short.txt", "very", "very-long-dir-name"]
+    );
     // Try read again
-    let names2 = root_dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let names2 = root_dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(names2, names);
 }
 
@@ -73,7 +75,10 @@ fn test_read_seek_short_file(fs: TestFilesystem) {
     short_file.read_exact(&mut buf2).unwrap();
     assert_eq!(str::from_utf8(&buf2).unwrap(), &TEST_TEXT[5..10]);
 
-    assert_eq!(short_file.seek(SeekFrom::Start(1000)).unwrap(), TEST_TEXT.len() as u64);
+    assert_eq!(
+        short_file.seek(SeekFrom::Start(1000)).unwrap(),
+        TEST_TEXT.len() as u64
+    );
     let mut buf2 = [0; 5];
     assert_eq!(short_file.read(&mut buf2).unwrap(), 0);
 }
@@ -103,7 +108,10 @@ fn test_read_long_file(fs: TestFilesystem) {
     assert_eq!(long_file.seek(SeekFrom::Start(2017)).unwrap(), 2017);
     let mut buf2 = [0; 10];
     long_file.read_exact(&mut buf2).unwrap();
-    assert_eq!(str::from_utf8(&buf2).unwrap(), &TEST_TEXT.repeat(1000)[2017..2027]);
+    assert_eq!(
+        str::from_utf8(&buf2).unwrap(),
+        &TEST_TEXT.repeat(1000)[2017..2027]
+    );
 }
 
 #[test]
@@ -124,11 +132,17 @@ fn test_read_long_file_fat32() {
 fn test_get_dir_by_path(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     let dir = root_dir.open_dir("very/long/path/").unwrap();
-    let names = dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let names = dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(names, [".", "..", "test.txt"]);
 
     let dir2 = root_dir.open_dir("very/long/path/././.").unwrap();
-    let names2 = dir2.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let names2 = dir2
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(names2, [".", "..", "test.txt"]);
 
     let root_dir2 = root_dir.open_dir("very/long/path/../../..").unwrap();
@@ -136,7 +150,10 @@ fn test_get_dir_by_path(fs: TestFilesystem) {
         .iter()
         .map(|r| r.unwrap().file_name())
         .collect::<Vec<String>>();
-    let root_names2 = root_dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let root_names2 = root_dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(root_names, root_names2);
 
     root_dir.open_dir("VERY-L~1").unwrap();
@@ -200,7 +217,10 @@ fn test_get_file_by_path_fat32() {
 fn test_volume_metadata(fs: TestFilesystem, fat_type: FatType) {
     assert_eq!(fs.volume_id(), 0x1234_5678);
     assert_eq!(fs.volume_label(), "Test!");
-    assert_eq!(&fs.read_volume_label_from_root_dir().unwrap().unwrap(), "Test!");
+    assert_eq!(
+        &fs.read_volume_label_from_root_dir().unwrap().unwrap(),
+        "Test!"
+    );
     assert_eq!(fs.fat_type(), fat_type);
 }
 

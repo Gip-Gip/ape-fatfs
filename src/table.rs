@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 
 use crate::error::{Error, IoError, ReadExactError};
 use crate::fs::{FatType, FsStatusFlags};
-use crate::io::{self, Read, ReadLeExt, Seek, Write, WriteLeExt, IoBase};
+use crate::io::{self, IoBase, Read, ReadLeExt, Seek, Write, WriteLeExt};
 
 struct Fat<S> {
     phantom: PhantomData<S>,
@@ -82,7 +82,12 @@ where
     }
 }
 
-fn write_fat<S, E>(fat: &mut S, fat_type: FatType, cluster: u32, value: FatValue) -> Result<(), Error<E>>
+fn write_fat<S, E>(
+    fat: &mut S,
+    fat_type: FatType,
+    cluster: u32,
+    value: FatValue,
+) -> Result<(), Error<E>>
 where
     S: Read + Write + Seek,
     E: IoError,
@@ -97,7 +102,11 @@ where
     }
 }
 
-fn get_next_cluster<S, E>(fat: &mut S, fat_type: FatType, cluster: u32) -> Result<Option<u32>, Error<E>>
+fn get_next_cluster<S, E>(
+    fat: &mut S,
+    fat_type: FatType,
+    cluster: u32,
+) -> Result<Option<u32>, Error<E>>
 where
     S: Read + Seek,
     E: IoError,
@@ -163,7 +172,10 @@ where
     Ok(new_cluster)
 }
 
-pub(crate) fn read_fat_flags<S, E>(fat: &mut S, fat_type: FatType) -> Result<FsStatusFlags, Error<E>>
+pub(crate) fn read_fat_flags<S, E>(
+    fat: &mut S,
+    fat_type: FatType,
+) -> Result<FsStatusFlags, Error<E>>
 where
     S: Read + Seek,
     E: IoError,
@@ -189,7 +201,11 @@ where
     Ok(FsStatusFlags { dirty, io_error })
 }
 
-pub(crate) fn count_free_clusters<S, E>(fat: &mut S, fat_type: FatType, total_clusters: u32) -> Result<u32, Error<E>>
+pub(crate) fn count_free_clusters<S, E>(
+    fat: &mut S,
+    fat_type: FatType,
+    total_clusters: u32,
+) -> Result<u32, Error<E>>
 where
     S: Read + Seek,
     E: IoError,
@@ -235,7 +251,8 @@ where
     };
     // mark entries at the end of FAT as used (after FAT but before sector end)
     let start_cluster = total_clusters + RESERVED_FAT_ENTRIES;
-    let end_cluster = (bytes_per_fat * BITS_PER_BYTE / u64::from(fat_type.bits_per_fat_entry())) as u32;
+    let end_cluster =
+        (bytes_per_fat * BITS_PER_BYTE / u64::from(fat_type.bits_per_fat_entry())) as u32;
     for cluster in start_cluster..end_cluster {
         write_fat(fat, fat_type, cluster, FatValue::EndOfChain)?;
     }
@@ -645,7 +662,12 @@ where
             // Move to the next cluster
             self.next();
             // Mark previous cluster as end of chain
-            write_fat(self.fat.borrow_mut(), self.fat_type, n, FatValue::EndOfChain)?;
+            write_fat(
+                self.fat.borrow_mut(),
+                self.fat_type,
+                n,
+                FatValue::EndOfChain,
+            )?;
             // Free rest of chain
             self.free()
         } else {
@@ -679,13 +701,14 @@ where
             return None;
         }
         if let Some(current_cluster) = self.cluster {
-            self.cluster = match get_next_cluster(self.fat.borrow_mut(), self.fat_type, current_cluster) {
-                Ok(next_cluster) => next_cluster,
-                Err(err) => {
-                    self.err = true;
-                    return Some(Err(err));
+            self.cluster =
+                match get_next_cluster(self.fat.borrow_mut(), self.fat_type, current_cluster) {
+                    Ok(next_cluster) => next_cluster,
+                    Err(err) => {
+                        self.err = true;
+                        return Some(Err(err));
+                    }
                 }
-            }
         }
         self.cluster.map(Ok)
     }
@@ -698,23 +721,58 @@ mod tests {
     use std::io::Cursor;
 
     fn test_fat<S: Read + Write + Seek + IoBase>(fat_type: FatType, mut cur: S)
-    where <S as IoBase>::Error: From<ReadExactError<<S as IoBase>::Error>> {
+    where
+        <S as IoBase>::Error: From<ReadExactError<<S as IoBase>::Error>>,
+    {
         // based on cluster maps from Wikipedia:
         // https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system#Cluster_map
-        assert_eq!(read_fat(&mut cur, fat_type, 1).ok(), Some(FatValue::EndOfChain));
-        assert_eq!(read_fat(&mut cur, fat_type, 4).ok(), Some(FatValue::Data(5)));
-        assert_eq!(read_fat(&mut cur, fat_type, 5).ok(), Some(FatValue::Data(6)));
-        assert_eq!(read_fat(&mut cur, fat_type, 8).ok(), Some(FatValue::EndOfChain));
-        assert_eq!(read_fat(&mut cur, fat_type, 9).ok(), Some(FatValue::Data(0xA)));
-        assert_eq!(read_fat(&mut cur, fat_type, 0xA).ok(), Some(FatValue::Data(0x14)));
-        assert_eq!(read_fat(&mut cur, fat_type, 0x12).ok(), Some(FatValue::Free));
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 1).ok(),
+            Some(FatValue::EndOfChain)
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 4).ok(),
+            Some(FatValue::Data(5))
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 5).ok(),
+            Some(FatValue::Data(6))
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 8).ok(),
+            Some(FatValue::EndOfChain)
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 9).ok(),
+            Some(FatValue::Data(0xA))
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0xA).ok(),
+            Some(FatValue::Data(0x14))
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x12).ok(),
+            Some(FatValue::Free)
+        );
         assert_eq!(read_fat(&mut cur, fat_type, 0x17).ok(), Some(FatValue::Bad));
         assert_eq!(read_fat(&mut cur, fat_type, 0x18).ok(), Some(FatValue::Bad));
-        assert_eq!(read_fat(&mut cur, fat_type, 0x1B).ok(), Some(FatValue::Free));
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x1B).ok(),
+            Some(FatValue::Free)
+        );
 
-        assert_eq!(find_free_cluster(&mut cur, fat_type, 2, 0x20).ok(), Some(0x12));
-        assert_eq!(find_free_cluster(&mut cur, fat_type, 0x12, 0x20).ok(), Some(0x12));
-        assert_eq!(find_free_cluster(&mut cur, fat_type, 0x13, 0x20).ok(), Some(0x1B));
+        assert_eq!(
+            find_free_cluster(&mut cur, fat_type, 2, 0x20).ok(),
+            Some(0x12)
+        );
+        assert_eq!(
+            find_free_cluster(&mut cur, fat_type, 0x12, 0x20).ok(),
+            Some(0x12)
+        );
+        assert_eq!(
+            find_free_cluster(&mut cur, fat_type, 0x13, 0x20).ok(),
+            Some(0x1B)
+        );
         assert!(find_free_cluster(&mut cur, fat_type, 0x13, 0x14).is_err());
 
         assert_eq!(count_free_clusters(&mut cur, fat_type, 0x1E).ok(), Some(5));
@@ -724,23 +782,33 @@ mod tests {
             alloc_cluster(&mut cur, fat_type, None, Some(0x13), 0x1E).ok(),
             Some(0x1B)
         );
-        assert_eq!(read_fat(&mut cur, fat_type, 0x1B).ok(), Some(FatValue::EndOfChain));
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x1B).ok(),
+            Some(FatValue::EndOfChain)
+        );
         assert_eq!(
             alloc_cluster(&mut cur, fat_type, Some(0x1B), None, 0x1E).ok(),
             Some(0x12)
         );
-        assert_eq!(read_fat(&mut cur, fat_type, 0x1B).ok(), Some(FatValue::Data(0x12)));
-        assert_eq!(read_fat(&mut cur, fat_type, 0x12).ok(), Some(FatValue::EndOfChain));
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x1B).ok(),
+            Some(FatValue::Data(0x12))
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x12).ok(),
+            Some(FatValue::EndOfChain)
+        );
         assert_eq!(count_free_clusters(&mut cur, fat_type, 0x1E).ok(), Some(3));
         // test reading from iterator
         {
             let iter = ClusterIterator::<&mut S, S::Error, S>::new(&mut cur, fat_type, 0x9);
             let actual_cluster_numbers = iter.map(Result::ok).collect::<Vec<_>>();
-            let expected_cluster_numbers = [0xA_u32, 0x14_u32, 0x15_u32, 0x16_u32, 0x19_u32, 0x1A_u32]
-                .iter()
-                .cloned()
-                .map(Some)
-                .collect::<Vec<_>>();
+            let expected_cluster_numbers =
+                [0xA_u32, 0x14_u32, 0x15_u32, 0x16_u32, 0x19_u32, 0x1A_u32]
+                    .iter()
+                    .cloned()
+                    .map(Some)
+                    .collect::<Vec<_>>();
             assert_eq!(actual_cluster_numbers, expected_cluster_numbers);
         }
         // test truncating a chain
@@ -749,9 +817,18 @@ mod tests {
             assert_eq!(iter.nth(3).map(Result::ok), Some(Some(0x16)));
             assert!(iter.truncate().is_ok());
         }
-        assert_eq!(read_fat(&mut cur, fat_type, 0x16).ok(), Some(FatValue::EndOfChain));
-        assert_eq!(read_fat(&mut cur, fat_type, 0x19).ok(), Some(FatValue::Free));
-        assert_eq!(read_fat(&mut cur, fat_type, 0x1A).ok(), Some(FatValue::Free));
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x16).ok(),
+            Some(FatValue::EndOfChain)
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x19).ok(),
+            Some(FatValue::Free)
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x1A).ok(),
+            Some(FatValue::Free)
+        );
         // test freeing a chain
         {
             let mut iter = ClusterIterator::<&mut S, S::Error, S>::new(&mut cur, fat_type, 0x9);
@@ -759,44 +836,66 @@ mod tests {
         }
         assert_eq!(read_fat(&mut cur, fat_type, 0x9).ok(), Some(FatValue::Free));
         assert_eq!(read_fat(&mut cur, fat_type, 0xA).ok(), Some(FatValue::Free));
-        assert_eq!(read_fat(&mut cur, fat_type, 0x14).ok(), Some(FatValue::Free));
-        assert_eq!(read_fat(&mut cur, fat_type, 0x15).ok(), Some(FatValue::Free));
-        assert_eq!(read_fat(&mut cur, fat_type, 0x16).ok(), Some(FatValue::Free));
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x14).ok(),
+            Some(FatValue::Free)
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x15).ok(),
+            Some(FatValue::Free)
+        );
+        assert_eq!(
+            read_fat(&mut cur, fat_type, 0x16).ok(),
+            Some(FatValue::Free)
+        );
     }
 
     #[test]
     fn test_fat12() {
         let fat: Vec<u8> = vec![
-            0xF0, 0xFF, 0xFF, 0x03, 0x40, 0x00, 0x05, 0x60, 0x00, 0x07, 0x80, 0x00, 0xFF, 0xAF, 0x00, 0x14, 0xC0, 0x00,
-            0x0D, 0xE0, 0x00, 0x0F, 0x00, 0x01, 0x11, 0xF0, 0xFF, 0x00, 0xF0, 0xFF, 0x15, 0x60, 0x01, 0x19, 0x70, 0xFF,
-            0xF7, 0xAF, 0x01, 0xFF, 0x0F, 0x00, 0x00, 0x70, 0xFF, 0x00, 0x00, 0x00,
+            0xF0, 0xFF, 0xFF, 0x03, 0x40, 0x00, 0x05, 0x60, 0x00, 0x07, 0x80, 0x00, 0xFF, 0xAF,
+            0x00, 0x14, 0xC0, 0x00, 0x0D, 0xE0, 0x00, 0x0F, 0x00, 0x01, 0x11, 0xF0, 0xFF, 0x00,
+            0xF0, 0xFF, 0x15, 0x60, 0x01, 0x19, 0x70, 0xFF, 0xF7, 0xAF, 0x01, 0xFF, 0x0F, 0x00,
+            0x00, 0x70, 0xFF, 0x00, 0x00, 0x00,
         ];
-        test_fat(FatType::Fat12, StdIoWrapper::new(Cursor::<Vec<u8>>::new(fat)));
+        test_fat(
+            FatType::Fat12,
+            StdIoWrapper::new(Cursor::<Vec<u8>>::new(fat)),
+        );
     }
 
     #[test]
     fn test_fat16() {
         let fat: Vec<u8> = vec![
-            0xF0, 0xFF, 0xFF, 0xFF, 0x03, 0x00, 0x04, 0x00, 0x05, 0x00, 0x06, 0x00, 0x07, 0x00, 0x08, 0x00, 0xFF, 0xFF,
-            0x0A, 0x00, 0x14, 0x00, 0x0C, 0x00, 0x0D, 0x00, 0x0E, 0x00, 0x0F, 0x00, 0x10, 0x00, 0x11, 0x00, 0xFF, 0xFF,
-            0x00, 0x00, 0xFF, 0xFF, 0x15, 0x00, 0x16, 0x00, 0x19, 0x00, 0xF7, 0xFF, 0xF7, 0xFF, 0x1A, 0x00, 0xFF, 0xFF,
-            0x00, 0x00, 0x00, 0x00, 0xF7, 0xFF, 0x00, 0x00, 0x00, 0x00,
+            0xF0, 0xFF, 0xFF, 0xFF, 0x03, 0x00, 0x04, 0x00, 0x05, 0x00, 0x06, 0x00, 0x07, 0x00,
+            0x08, 0x00, 0xFF, 0xFF, 0x0A, 0x00, 0x14, 0x00, 0x0C, 0x00, 0x0D, 0x00, 0x0E, 0x00,
+            0x0F, 0x00, 0x10, 0x00, 0x11, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x15, 0x00,
+            0x16, 0x00, 0x19, 0x00, 0xF7, 0xFF, 0xF7, 0xFF, 0x1A, 0x00, 0xFF, 0xFF, 0x00, 0x00,
+            0x00, 0x00, 0xF7, 0xFF, 0x00, 0x00, 0x00, 0x00,
         ];
-        test_fat(FatType::Fat16, StdIoWrapper::new(Cursor::<Vec<u8>>::new(fat)));
+        test_fat(
+            FatType::Fat16,
+            StdIoWrapper::new(Cursor::<Vec<u8>>::new(fat)),
+        );
     }
 
     #[test]
     fn test_fat32() {
         let fat: Vec<u8> = vec![
-            0xF0, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0x0F, 0x04, 0x00, 0x00, 0x00, 0x05, 0x00,
-            0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F,
-            0x0A, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x0D, 0x00, 0x00, 0x00, 0x0E, 0x00,
-            0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F,
-            0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 0x15, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00, 0x19, 0x00,
-            0x00, 0x00, 0xF7, 0xFF, 0xFF, 0x0F, 0xF7, 0xFF, 0xFF, 0x0F, 0x1A, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF7, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0xF0, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0x0F, 0x04, 0x00,
+            0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00,
+            0x08, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 0x0A, 0x00, 0x00, 0x00, 0x14, 0x00,
+            0x00, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x0D, 0x00, 0x00, 0x00, 0x0E, 0x00, 0x00, 0x00,
+            0x0F, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0xFF, 0xFF,
+            0xFF, 0x0F, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 0x15, 0x00, 0x00, 0x00,
+            0x16, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00, 0x00, 0xF7, 0xFF, 0xFF, 0x0F, 0xF7, 0xFF,
+            0xFF, 0x0F, 0x1A, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0xF7, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00,
         ];
-        test_fat(FatType::Fat32, StdIoWrapper::new(Cursor::<Vec<u8>>::new(fat)));
+        test_fat(
+            FatType::Fat32,
+            StdIoWrapper::new(Cursor::<Vec<u8>>::new(fat)),
+        );
     }
 }

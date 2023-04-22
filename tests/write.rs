@@ -1,22 +1,12 @@
 use std::fs;
-use std::io;
 use std::io::prelude::*;
 use std::mem;
 use std::str;
 
 use ape_fatfs::{
-        time::DefaultTimeProvider,
-        fs::{
-            LossyOemCpConverter,
-            FileSystem,
-            FsOptions
-        },
-        io::{
-            Write,
-            Seek,
-            SeekFrom,
-            StdIoWrapper
-        }
+    fs::{FileSystem, FsOptions, LossyOemCpConverter},
+    io::{Seek, SeekFrom, StdIoWrapper, Write},
+    time::DefaultTimeProvider,
 };
 use fscommon::BufStream;
 
@@ -28,7 +18,8 @@ const TMP_DIR: &str = "tmp";
 const TEST_STR: &str = "Hi there Rust programmer!\n";
 const TEST_STR2: &str = "Rust is cool!\n";
 
-type TestFilesystem = FileSystem<StdIoWrapper<BufStream<fs::File>>, DefaultTimeProvider, LossyOemCpConverter>;
+type TestFilesystem =
+    FileSystem<StdIoWrapper<BufStream<fs::File>>, DefaultTimeProvider, LossyOemCpConverter>;
 
 fn call_with_tmp_img<F: Fn(&str) -> ()>(f: F, filename: &str, test_seq: u32) {
     let _ = env_logger::builder().is_test(true).try_init();
@@ -40,8 +31,12 @@ fn call_with_tmp_img<F: Fn(&str) -> ()>(f: F, filename: &str, test_seq: u32) {
     fs::remove_file(tmp_path).unwrap();
 }
 
-fn open_TestFilesystem_rw(tmp_path: &str) -> TestFilesystem {
-    let file = fs::OpenOptions::new().read(true).write(true).open(&tmp_path).unwrap();
+fn open_filesystem_rw(tmp_path: &str) -> TestFilesystem {
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&tmp_path)
+        .unwrap();
     let buf_file = BufStream::new(file);
     let options = FsOptions::new().update_accessed_date(true);
     TestFilesystem::new(buf_file, options).unwrap()
@@ -49,7 +44,7 @@ fn open_TestFilesystem_rw(tmp_path: &str) -> TestFilesystem {
 
 fn call_with_fs<F: Fn(TestFilesystem) -> ()>(f: F, filename: &str, test_seq: u32) {
     let callback = |tmp_path: &str| {
-        let fs = open_TestFilesystem_rw(tmp_path);
+        let fs = open_filesystem_rw(tmp_path);
         f(fs);
     };
     call_with_tmp_img(&callback, filename, test_seq);
@@ -118,17 +113,32 @@ fn test_remove(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     assert!(root_dir.remove("very/long/path").is_err());
     let dir = root_dir.open_dir("very/long/path").unwrap();
-    let mut names = dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let mut names = dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(names, [".", "..", "test.txt"]);
     root_dir.remove("very/long/path/test.txt").unwrap();
-    names = dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    names = dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(names, [".", ".."]);
     assert!(root_dir.remove("very/long/path").is_ok());
 
-    names = root_dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
-    assert_eq!(names, ["long.txt", "short.txt", "very", "very-long-dir-name"]);
+    names = root_dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
+    assert_eq!(
+        names,
+        ["long.txt", "short.txt", "very", "very-long-dir-name"]
+    );
     root_dir.remove("long.txt").unwrap();
-    names = root_dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    names = root_dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(names, ["short.txt", "very", "very-long-dir-name"]);
 }
 
@@ -150,7 +160,10 @@ fn test_remove_fat32() {
 fn test_create_file(fs: TestFilesystem) {
     let root_dir = fs.root_dir();
     let dir = root_dir.open_dir("very/long/path").unwrap();
-    let mut names = dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    let mut names = dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(names, [".", "..", "test.txt"]);
     {
         // test some invalid names
@@ -163,8 +176,14 @@ fn test_create_file(fs: TestFilesystem) {
         file.write_all(&TEST_STR.as_bytes()).unwrap();
     }
     // check for dir entry
-    names = dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
-    assert_eq!(names, [".", "..", "test.txt", "new-file-with-long-name.txt"]);
+    names = dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
+    assert_eq!(
+        names,
+        [".", "..", "test.txt", "new-file-with-long-name.txt"]
+    );
     names = dir
         .iter()
         .map(|r| r.unwrap().short_file_name())
@@ -184,7 +203,10 @@ fn test_create_file(fs: TestFilesystem) {
         let name = format!("test{}", i);
         dir.create_file(&name).unwrap();
     }
-    names = dir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+    names = dir
+        .iter()
+        .map(|r| r.unwrap().file_name())
+        .collect::<Vec<String>>();
     assert_eq!(names.len(), 4 + 512 / 32);
     // check creating existing file opens it
     {
@@ -223,8 +245,13 @@ fn test_create_dir(fs: TestFilesystem) {
         .collect::<Vec<String>>();
     assert_eq!(names, [".", "..", "test.txt"]);
     {
-        let subdir = root_dir.create_dir("very/long/path/new-dir-with-long-name").unwrap();
-        names = subdir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+        let subdir = root_dir
+            .create_dir("very/long/path/new-dir-with-long-name")
+            .unwrap();
+        names = subdir
+            .iter()
+            .map(|r| r.unwrap().file_name())
+            .collect::<Vec<String>>();
         assert_eq!(names, [".", ".."]);
     }
     // check if new entry is visible in parent
@@ -235,26 +262,44 @@ fn test_create_dir(fs: TestFilesystem) {
     assert_eq!(names, [".", "..", "test.txt", "new-dir-with-long-name"]);
     {
         // Check if new directory can be opened and read
-        let subdir = root_dir.open_dir("very/long/path/new-dir-with-long-name").unwrap();
-        names = subdir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+        let subdir = root_dir
+            .open_dir("very/long/path/new-dir-with-long-name")
+            .unwrap();
+        names = subdir
+            .iter()
+            .map(|r| r.unwrap().file_name())
+            .collect::<Vec<String>>();
         assert_eq!(names, [".", ".."]);
     }
     // Check if '.' is alias for new directory
     {
-        let subdir = root_dir.open_dir("very/long/path/new-dir-with-long-name/.").unwrap();
-        names = subdir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+        let subdir = root_dir
+            .open_dir("very/long/path/new-dir-with-long-name/.")
+            .unwrap();
+        names = subdir
+            .iter()
+            .map(|r| r.unwrap().file_name())
+            .collect::<Vec<String>>();
         assert_eq!(names, [".", ".."]);
     }
     // Check if '..' is alias for parent directory
     {
-        let subdir = root_dir.open_dir("very/long/path/new-dir-with-long-name/..").unwrap();
-        names = subdir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+        let subdir = root_dir
+            .open_dir("very/long/path/new-dir-with-long-name/..")
+            .unwrap();
+        names = subdir
+            .iter()
+            .map(|r| r.unwrap().file_name())
+            .collect::<Vec<String>>();
         assert_eq!(names, [".", "..", "test.txt", "new-dir-with-long-name"]);
     }
     // check if creating existing directory returns it
     {
         let subdir = root_dir.create_dir("very").unwrap();
-        names = subdir.iter().map(|r| r.unwrap().file_name()).collect::<Vec<String>>();
+        names = subdir
+            .iter()
+            .map(|r| r.unwrap().file_name())
+            .collect::<Vec<String>>();
         assert_eq!(names, [".", "..", "long"]);
     }
     // check short names validity after create_dir
@@ -295,7 +340,9 @@ fn test_rename_file(fs: TestFilesystem) {
     assert_eq!(entries[2].len(), 14);
     let stats = fs.stats().unwrap();
 
-    parent_dir.rename("test.txt", &parent_dir, "new-long-name.txt").unwrap();
+    parent_dir
+        .rename("test.txt", &parent_dir, "new-long-name.txt")
+        .unwrap();
     let entries = parent_dir.iter().map(|r| r.unwrap()).collect::<Vec<_>>();
     let names = entries.iter().map(|r| r.file_name()).collect::<Vec<_>>();
     assert_eq!(names, [".", "..", "new-long-name.txt"]);
@@ -312,7 +359,13 @@ fn test_rename_file(fs: TestFilesystem) {
     let names = entries.iter().map(|r| r.file_name()).collect::<Vec<_>>();
     assert_eq!(
         names,
-        ["long.txt", "short.txt", "very", "very-long-dir-name", "moved-file.txt"]
+        [
+            "long.txt",
+            "short.txt",
+            "very",
+            "very-long-dir-name",
+            "moved-file.txt"
+        ]
     );
     assert_eq!(entries[4].len(), TEST_STR2.len() as u64);
     let mut file = root_dir.open_file("moved-file.txt").unwrap();
@@ -320,15 +373,25 @@ fn test_rename_file(fs: TestFilesystem) {
     file.read_to_end(&mut buf).unwrap();
     assert_eq!(str::from_utf8(&buf).unwrap(), TEST_STR2);
 
-    assert!(root_dir.rename("moved-file.txt", &root_dir, "short.txt").is_err());
+    assert!(root_dir
+        .rename("moved-file.txt", &root_dir, "short.txt")
+        .is_err());
     let entries = root_dir.iter().map(|r| r.unwrap()).collect::<Vec<_>>();
     let names = entries.iter().map(|r| r.file_name()).collect::<Vec<_>>();
     assert_eq!(
         names,
-        ["long.txt", "short.txt", "very", "very-long-dir-name", "moved-file.txt"]
+        [
+            "long.txt",
+            "short.txt",
+            "very",
+            "very-long-dir-name",
+            "moved-file.txt"
+        ]
     );
 
-    assert!(root_dir.rename("moved-file.txt", &root_dir, "moved-file.txt").is_ok());
+    assert!(root_dir
+        .rename("moved-file.txt", &root_dir, "moved-file.txt")
+        .is_ok());
 
     let new_stats = fs.stats().unwrap();
     assert_eq!(new_stats.free_clusters(), stats.free_clusters());
@@ -351,20 +414,20 @@ fn test_rename_file_fat32() {
 
 fn test_dirty_flag(tmp_path: &str) {
     // Open TestFilesystem, make change, and forget it - should become dirty
-    let fs = open_TestFilesystem_rw(tmp_path);
+    let fs = open_filesystem_rw(tmp_path);
     let status_flags = fs.read_status_flags().unwrap();
     assert_eq!(status_flags.dirty(), false);
     assert_eq!(status_flags.io_error(), false);
     fs.root_dir().create_file("abc.txt").unwrap();
     mem::forget(fs);
     // Check if volume is dirty now
-    let fs = open_TestFilesystem_rw(tmp_path);
+    let fs = open_filesystem_rw(tmp_path);
     let status_flags = fs.read_status_flags().unwrap();
     assert_eq!(status_flags.dirty(), true);
     assert_eq!(status_flags.io_error(), false);
     fs.unmount().unwrap();
     // Make sure remounting does not clear the dirty flag
-    let fs = open_TestFilesystem_rw(tmp_path);
+    let fs = open_filesystem_rw(tmp_path);
     let status_flags = fs.read_status_flags().unwrap();
     assert_eq!(status_flags.dirty(), true);
     assert_eq!(status_flags.io_error(), false);
@@ -393,9 +456,18 @@ fn test_multiple_files_in_directory(fs: TestFilesystem) {
         file.write_all(TEST_STR.as_bytes()).unwrap();
         file.flush().unwrap();
 
-        let file = dir.iter().map(|r| r.unwrap()).find(|e| e.file_name() == name).unwrap();
+        let file = dir
+            .iter()
+            .map(|r| r.unwrap())
+            .find(|e| e.file_name() == name)
+            .unwrap();
 
-        assert_eq!(TEST_STR.len() as u64, file.len(), "Wrong file len on iteration {}", i);
+        assert_eq!(
+            TEST_STR.len() as u64,
+            file.len(),
+            "Wrong file len on iteration {}",
+            i
+        );
     }
 }
 
