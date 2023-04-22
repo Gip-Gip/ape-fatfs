@@ -5,12 +5,10 @@ authors = ["Rafał Harabień <rafalh92@outlook.com>", "Charles Thompson"]
 edition = "2021"
 repository = "https://github.com/Gip-Gip/ape-fatfs"
 readme = "README.md"
-keywords = ["fat", "filesystem", "no_std", "embedded", ""]
+keywords = ["fat", "filesystem", "no_std", "embedded"]
 categories = ["filesystem", "embedded"]
 license = "MIT"
-description = """
-FAT filesystem library.
-"""
+description = "versitile FAT library for embedded systems"
 exclude = [
     "resources/*",
 ]
