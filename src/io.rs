@@ -175,18 +175,21 @@ where
 {
     type Error = <Self as IoBase>::Error;
 
+    #[inline]
     fn read_u8(&mut self) -> Result<u8, Self::Error> {
         let mut buf = [0_u8; 1];
         self.read_exact(&mut buf)?;
         Ok(buf[0])
     }
 
+    #[inline]
     fn read_u16_le(&mut self) -> Result<u16, Self::Error> {
         let mut buf = [0_u8; 2];
         self.read_exact(&mut buf)?;
         Ok(u16::from_le_bytes(buf))
     }
 
+    #[inline]
     fn read_u32_le(&mut self) -> Result<u32, Self::Error> {
         let mut buf = [0_u8; 4];
         self.read_exact(&mut buf)?;
@@ -204,14 +207,17 @@ pub(crate) trait WriteLeExt {
 impl<T: Write> WriteLeExt for T {
     type Error = <Self as IoBase>::Error;
 
+    #[inline]
     fn write_u8(&mut self, n: u8) -> Result<(), Self::Error> {
         self.write_all(&[n])
     }
 
+    #[inline]
     fn write_u16_le(&mut self, n: u16) -> Result<(), Self::Error> {
         self.write_all(&n.to_le_bytes())
     }
 
+    #[inline]
     fn write_u32_le(&mut self, n: u32) -> Result<(), Self::Error> {
         self.write_all(&n.to_le_bytes())
     }

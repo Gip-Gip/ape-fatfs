@@ -1,12 +1,3 @@
-use core::borrow::BorrowMut;
-use core::cell::{Cell, RefCell};
-use core::char;
-use core::cmp;
-use core::convert::TryFrom;
-use core::fmt::Debug;
-use core::marker::PhantomData;
-use core::u32;
-
 use crate::boot_sector::{format_boot_sector, BiosParameterBlock, BootSector};
 use crate::dir::{Dir, DirRawStream};
 use crate::dir_entry::{DirFileEntryData, FileAttributes, SFN_PADDING, SFN_SIZE};
@@ -18,6 +9,14 @@ use crate::table::{
     RESERVED_FAT_ENTRIES,
 };
 use crate::time::{DefaultTimeProvider, TimeProvider};
+use core::borrow::BorrowMut;
+use core::cell::{Cell, RefCell};
+use core::char;
+use core::cmp;
+use core::convert::TryFrom;
+use core::fmt::Debug;
+use core::marker::PhantomData;
+use core::u32;
 
 // FAT implementation based on:
 //   http://wiki.osdev.org/FAT
@@ -182,15 +181,18 @@ impl FsInfoSector {
         })
     }
 
-    fn serialize<W: Write>(&self, wrt: &mut W) -> Result<(), Error<W::Error>> {
+    fn serialize<W: Write + Seek>(&self, wrt: &mut W) -> Result<(), Error<W::Error>> {
         wrt.write_u32_le(Self::LEAD_SIG)?;
-        let reserved = [0_u8; 480];
-        wrt.write_all(&reserved)?;
+        // let reserved = [0_u8; 480]; // Why do we need to write reserved?
+        // Just seek 480 bytes...
+        // wrt.write_all(&reserved)?;
+        wrt.seek(io::SeekFrom::Current(480))?;
         wrt.write_u32_le(Self::STRUC_SIG)?;
         wrt.write_u32_le(self.free_cluster_count.unwrap_or(0xFFFF_FFFF))?;
         wrt.write_u32_le(self.next_free_cluster.unwrap_or(0xFFFF_FFFF))?;
-        let reserved2 = [0_u8; 12];
-        wrt.write_all(&reserved2)?;
+        // let reserved2 = [0_u8; 12];
+        // wrt.write_all(&reserved2)?;
+        wrt.seek(io::SeekFrom::Current(12))?;
         wrt.write_u32_le(Self::TRAIL_SIG)?;
         Ok(())
     }
