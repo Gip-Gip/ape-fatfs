@@ -2,6 +2,8 @@ use core::cmp;
 use core::u16;
 use core::u8;
 
+use bytemuck::*;
+
 use crate::dir_entry::DIR_ENTRY_SIZE;
 use crate::error::{Error, IoError, ReadExactError};
 use crate::fs::{FatType, FormatVolumeOptions, FsStatusFlags};
@@ -95,33 +97,80 @@ impl BiosParameterBlock {
     }
 
     fn serialize<W: Write>(&self, wrt: &mut W) -> Result<(), W::Error> {
-        wrt.write_u16_le(self.bytes_per_sector)?;
-        wrt.write_u8(self.sectors_per_cluster)?;
-        wrt.write_u16_le(self.reserved_sectors)?;
-        wrt.write_u8(self.fats)?;
-        wrt.write_u16_le(self.root_entries)?;
-        wrt.write_u16_le(self.total_sectors_16)?;
-        wrt.write_u8(self.media)?;
-        wrt.write_u16_le(self.sectors_per_fat_16)?;
-        wrt.write_u16_le(self.sectors_per_track)?;
-        wrt.write_u16_le(self.heads)?;
-        wrt.write_u32_le(self.hidden_sectors)?;
-        wrt.write_u32_le(self.total_sectors_32)?;
+        // wrt.write_u16_le(self.bytes_per_sector)?;
+        // wrt.write_u8(self.sectors_per_cluster)?;
+        // wrt.write_u16_le(self.reserved_sectors)?;
+        // wrt.write_u8(self.fats)?;
+        // wrt.write_u16_le(self.root_entries)?;
+        // wrt.write_u16_le(self.total_sectors_16)?;
+        // wrt.write_u8(self.media)?;
+        // wrt.write_u16_le(self.sectors_per_fat_16)?;
+        // wrt.write_u16_le(self.sectors_per_track)?;
+        // wrt.write_u16_le(self.heads)?;
+        // wrt.write_u32_le(self.hidden_sectors)?;
+        // wrt.write_u32_le(self.total_sectors_32)?;
+        #[repr(C, packed)]
+        #[derive(Pod, Zeroable, Copy, Clone)]
+        struct Data(u16, u8, u16, u8, u16, u16, u8, u16, u16, u16, u32, u32);
+        let data: Data = Data(
+            self.bytes_per_sector,
+            self.sectors_per_cluster,
+            self.reserved_sectors,
+            self.fats,
+            self.root_entries,
+            self.total_sectors_16,
+            self.media,
+            self.sectors_per_fat_16,
+            self.sectors_per_track,
+            self.heads,
+            self.hidden_sectors,
+            self.total_sectors_32,
+        );
+
+        wrt.write_all(bytes_of(&data))?;
 
         if self.is_fat32() {
-            wrt.write_u32_le(self.sectors_per_fat_32)?;
-            wrt.write_u16_le(self.extended_flags)?;
-            wrt.write_u16_le(self.fs_version)?;
-            wrt.write_u32_le(self.root_dir_first_cluster)?;
-            wrt.write_u16_le(self.fs_info_sector)?;
-            wrt.write_u16_le(self.backup_boot_sector)?;
+            // wrt.write_u32_le(self.sectors_per_fat_32)?;
+            // wrt.write_u16_le(self.extended_flags)?;
+            // wrt.write_u16_le(self.fs_version)?;
+            // wrt.write_u32_le(self.root_dir_first_cluster)?;
+            // wrt.write_u16_le(self.fs_info_sector)?;
+            // wrt.write_u16_le(self.backup_boot_sector)?;
+
+            #[repr(C, packed)]
+            #[derive(Pod, Zeroable, Copy, Clone)]
+            struct Data(u32, u16, u16, u32, u16, u16);
+
+            let data: Data = Data(
+                self.sectors_per_fat_32,
+                self.extended_flags,
+                self.fs_version,
+                self.root_dir_first_cluster,
+                self.fs_info_sector,
+                self.backup_boot_sector,
+            );
+
+            wrt.write_all(bytes_of(&data))?;
+
             wrt.write_all(&self.reserved_0)?;
         }
 
-        wrt.write_u8(self.drive_num)?;
-        wrt.write_u8(self.reserved_1)?;
-        wrt.write_u8(self.ext_sig)?; // 0x29
-        wrt.write_u32_le(self.volume_id)?;
+        // wrt.write_u8(self.drive_num)?;
+        // wrt.write_u8(self.reserved_1)?;
+        // wrt.write_u8(self.ext_sig)?; // 0x29
+        // wrt.write_u32_le(self.volume_id)?;
+        #[repr(C, packed)]
+        #[derive(Pod, Zeroable, Copy, Clone)]
+        struct Data2(u8, u8, u8, u32);
+
+        let data2 = Data2(
+            self.drive_num,
+            self.reserved_1,
+            self.ext_sig,
+            self.volume_id,
+        );
+
+        wrt.write_all(bytes_of(&data2))?;
         wrt.write_all(&self.volume_label)?;
         wrt.write_all(&self.fs_type_label)?;
         Ok(())
@@ -328,10 +377,12 @@ impl BiosParameterBlock {
         Ok(())
     }
 
+    #[inline]
     pub(crate) fn mirroring_enabled(&self) -> bool {
         self.extended_flags & 0x80 == 0
     }
 
+    #[inline]
     pub(crate) fn active_fat(&self) -> u16 {
         // The zero-based number of the active FAT is only valid if mirroring is disabled.
         if self.mirroring_enabled() {
@@ -341,10 +392,12 @@ impl BiosParameterBlock {
         }
     }
 
+    #[inline]
     pub(crate) fn status_flags(&self) -> FsStatusFlags {
         FsStatusFlags::decode(self.reserved_1)
     }
 
+    #[inline]
     pub(crate) fn is_fat32(&self) -> bool {
         // because this field must be zero on FAT32, and
         // because it must be non-zero on FAT12/FAT16,
@@ -352,6 +405,7 @@ impl BiosParameterBlock {
         self.sectors_per_fat_16 == 0
     }
 
+    #[inline]
     pub(crate) fn sectors_per_fat(&self) -> u32 {
         if self.is_fat32() {
             self.sectors_per_fat_32
@@ -360,6 +414,7 @@ impl BiosParameterBlock {
         }
     }
 
+    #[inline]
     pub(crate) fn total_sectors(&self) -> u32 {
         if self.total_sectors_16 == 0 {
             self.total_sectors_32
@@ -368,25 +423,30 @@ impl BiosParameterBlock {
         }
     }
 
+    #[inline]
     pub(crate) fn reserved_sectors(&self) -> u32 {
         u32::from(self.reserved_sectors)
     }
 
+    #[inline]
     pub(crate) fn root_dir_sectors(&self) -> u32 {
         let root_dir_bytes = u32::from(self.root_entries) * DIR_ENTRY_SIZE;
         (root_dir_bytes + u32::from(self.bytes_per_sector) - 1) / u32::from(self.bytes_per_sector)
     }
 
+    #[inline]
     pub(crate) fn sectors_per_all_fats(&self) -> u32 {
         u32::from(self.fats) * self.sectors_per_fat()
     }
 
+    #[inline]
     pub(crate) fn first_data_sector(&self) -> u32 {
         let root_dir_sectors = self.root_dir_sectors();
         let fat_sectors = self.sectors_per_all_fats();
         self.reserved_sectors() + fat_sectors + root_dir_sectors
     }
 
+    #[inline]
     pub(crate) fn total_clusters(&self) -> u32 {
         let total_sectors = self.total_sectors();
         let first_data_sector = self.first_data_sector();
@@ -394,29 +454,35 @@ impl BiosParameterBlock {
         data_sectors / u32::from(self.sectors_per_cluster)
     }
 
+    #[inline]
     pub(crate) fn bytes_from_sectors(&self, sectors: u32) -> u64 {
         // Note: total number of sectors is a 32 bit number so offsets have to be 64 bit
         u64::from(sectors) * u64::from(self.bytes_per_sector)
     }
 
+    #[inline]
     pub(crate) fn sectors_from_clusters(&self, clusters: u32) -> u32 {
         // Note: total number of sectors is a 32 bit number so it should not overflow
         clusters * u32::from(self.sectors_per_cluster)
     }
 
+    #[inline]
     pub(crate) fn cluster_size(&self) -> u32 {
         u32::from(self.sectors_per_cluster) * u32::from(self.bytes_per_sector)
     }
 
+    #[inline]
     pub(crate) fn clusters_from_bytes(&self, bytes: u64) -> u32 {
         let cluster_size = u64::from(self.cluster_size());
         ((bytes + cluster_size - 1) / cluster_size) as u32
     }
 
+    #[inline]
     pub(crate) fn fs_info_sector(&self) -> u32 {
         u32::from(self.fs_info_sector)
     }
 
+    #[inline]
     pub(crate) fn backup_boot_sector(&self) -> u32 {
         u32::from(self.backup_boot_sector)
     }
