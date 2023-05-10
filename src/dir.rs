@@ -159,6 +159,25 @@ impl<'a, IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> Dir<'a, IO, T
         Err(Error::NotFound) //("No such file or directory"))
     }
 
+    /// Check to see if a file or directory with the given name exists
+    pub fn exists(&self, path: &str) -> Result<bool, Error<IO::Error>> {
+        trace!("Dir::exists_file {}", path);
+        // traverse path
+        let (name, rest_opt) = split_path(path);
+        if let Some(rest) = rest_opt {
+            let e = self.find_entry(name, Some(true), None)?;
+            return e.to_dir().exists(rest);
+        }
+
+        match self.find_entry(name, Some(false), None) {
+            Ok(_) => Ok(true),
+            Err(e) => match e {
+                Error::NotFound => Ok(false),
+                _ => Err(e),
+            },
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub(crate) fn find_volume_entry(
         &self,
