@@ -12,9 +12,9 @@ project's `Cargo.toml`.
 
 ```toml
 [dependencies]
-ape-fatfs = "0.1.0"
+ape-fatfs = "0.2.0"
 # Comment out the above and uncomment the below to enable no_std support
-# ape-fatfs = { default_features = false, version = 0.1.0 }
+# ape-fatfs = { default_features = false, version = 0.2.0 }
 ```
 
 # Examples
