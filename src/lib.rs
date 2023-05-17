@@ -1,3 +1,7 @@
+//! [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE.txt)
+//! [![Crates.io](https://img.shields.io/crates/v/ape-fatfs)](https://crates.io/crates/ape-fatfs)
+//! [![Documentation](https://docs.rs/ape-fatfs/badge.svg)](https://docs.rs/ape-fatfs)
+//! [![APE](https://img.shields.io/badge/-APE-%2359118e)](https://openapeshop.org/)
 //! ## *versitile FAT library for embedded systems*
 //!
 //! # Usage
