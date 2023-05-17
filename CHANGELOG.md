@@ -3,6 +3,11 @@ Changelog
 
 # ape-fatfs
 
+## 0.2.0
+
+ * **Added `exists` function to directories** *(commit b8ee3a8)*
+ * **Made minor filesystem optimizations** *(commit 809b066)*
+
 ## 0.1.0
 
  * **Ported to Rust 2022** *(commit 6942ef6)*
