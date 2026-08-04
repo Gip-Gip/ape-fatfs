@@ -7,7 +7,7 @@ use bytemuck::*;
 use crate::dir_entry::DIR_ENTRY_SIZE;
 use crate::error::{FatError, IoError, ReadExactError};
 use crate::fs::{FatType, FormatVolumeOptions, FsStatusFlags};
-use crate::io::{Read, ReadLeExt, Write, WriteLeExt};
+use crate::io::{Read, ReadLeExt, Write};
 use crate::table::RESERVED_FAT_ENTRIES;
 
 const BITS_PER_BYTE: u32 = 8;
@@ -289,7 +289,7 @@ impl BiosParameterBlock {
             );
             return Err(FatError::CorruptedFileSystem);
         }
-        if (u32::from(self.root_entries) * DIR_ENTRY_SIZE) % u32::from(self.bytes_per_sector) != 0 {
+        if !(u32::from(self.root_entries) * DIR_ENTRY_SIZE).is_multiple_of(u32::from(self.bytes_per_sector)) {
             warn!("Root entries should fill sectors fully");
         }
         Ok(())
@@ -431,7 +431,7 @@ impl BiosParameterBlock {
     #[inline]
     pub(crate) fn root_dir_sectors(&self) -> u32 {
         let root_dir_bytes = u32::from(self.root_entries) * DIR_ENTRY_SIZE;
-        (root_dir_bytes + u32::from(self.bytes_per_sector) - 1) / u32::from(self.bytes_per_sector)
+        root_dir_bytes.div_ceil(u32::from(self.bytes_per_sector))
     }
 
     #[inline]
@@ -474,7 +474,7 @@ impl BiosParameterBlock {
     #[inline]
     pub(crate) fn clusters_from_bytes(&self, bytes: u64) -> u32 {
         let cluster_size = u64::from(self.cluster_size());
-        ((bytes + cluster_size - 1) / cluster_size) as u32
+        bytes.div_ceil(cluster_size) as u32
     }
 
     #[inline]
@@ -660,7 +660,7 @@ fn determine_sectors_per_fat(
     let bits_per_cluster =
         u32::from(sectors_per_cluster) * u32::from(bytes_per_sector) * BITS_PER_BYTE;
     let t2 = u64::from(bits_per_cluster / fat_type.bits_per_fat_entry() + u32::from(fats));
-    let sectors_per_fat = (t1 + t2 - 1) / t2;
+    let sectors_per_fat = t1.div_ceil(t2);
     // Note: casting is safe here because number of sectors per FAT cannot be bigger than total sectors number
     sectors_per_fat as u32
 }
@@ -724,7 +724,7 @@ fn determine_root_dir_sectors(
         0
     } else {
         let root_dir_bytes = u32::from(root_dir_entries) * DIR_ENTRY_SIZE;
-        (root_dir_bytes + u32::from(bytes_per_sector) - 1) / u32::from(bytes_per_sector)
+        root_dir_bytes.div_ceil(u32::from(bytes_per_sector))
     }
 }
 

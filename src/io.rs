@@ -60,23 +60,23 @@ impl From<std::io::SeekFrom> for StdSeekPosWrapper {
 }
 
 #[cfg(feature = "std")]
-impl Into<std::io::SeekFrom> for StdSeekPosWrapper {
-    fn into(self) -> std::io::SeekFrom {
-        match self {
-            Self::Start(pos) => std::io::SeekFrom::Start(pos),
-            Self::End(pos) => std::io::SeekFrom::End(pos),
-            Self::Current(pos) => std::io::SeekFrom::Current(pos),
+impl From<StdSeekPosWrapper> for std::io::SeekFrom {
+    fn from(val: StdSeekPosWrapper) -> Self {
+        match val {
+            StdSeekPosWrapper::Start(pos) => std::io::SeekFrom::Start(pos),
+            StdSeekPosWrapper::End(pos) => std::io::SeekFrom::End(pos),
+            StdSeekPosWrapper::Current(pos) => std::io::SeekFrom::Current(pos),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl Into<embedded_io::SeekFrom> for StdSeekPosWrapper {
-    fn into(self) -> embedded_io::SeekFrom {
-        match self {
-            Self::Start(pos) => embedded_io::SeekFrom::Start(pos),
-            Self::End(pos) => embedded_io::SeekFrom::End(pos),
-            Self::Current(pos) => embedded_io::SeekFrom::Current(pos),
+impl From<StdSeekPosWrapper> for embedded_io::SeekFrom {
+    fn from(val: StdSeekPosWrapper) -> Self {
+        match val {
+            StdSeekPosWrapper::Start(pos) => embedded_io::SeekFrom::Start(pos),
+            StdSeekPosWrapper::End(pos) => embedded_io::SeekFrom::End(pos),
+            StdSeekPosWrapper::Current(pos) => embedded_io::SeekFrom::Current(pos),
         }
     }
 }
@@ -89,9 +89,9 @@ impl From<std::io::Error> for StdErrWrapper {
 }
 
 #[cfg(feature = "std")]
-impl Into<std::io::Error> for StdErrWrapper {
-    fn into(self) -> std::io::Error {
-        std::io::Error::new(std::io::ErrorKind::Other, "pls implement")
+impl From<StdErrWrapper> for std::io::Error {
+    fn from(_val: StdErrWrapper) -> Self {
+        std::io::Error::other("pls implement")
     }
 }
 

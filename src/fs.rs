@@ -646,7 +646,7 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     }
 
     /// Returns a root directory object allowing for futher penetration of a filesystem structure.
-    pub fn root_dir(&self) -> Dir<IO, TP, OCC> {
+    pub fn root_dir(&self) -> Dir<'_, IO, TP, OCC> {
         trace!("root_dir");
         let root_rdr = {
             match self.fat_type {

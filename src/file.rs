@@ -230,7 +230,7 @@ impl<IO: ReadWriteSeek, TP: TimeProvider, OCC> File<'_, IO, TP, OCC> {
         if let Some(ref mut e) = self.entry {
             let now = self.fs.options.time_provider.get_current_date_time();
             e.set_modified(now);
-            if e.inner().size().map_or(false, |s| offset > s) {
+            if e.inner().size().is_some_and(|s| offset > s) {
                 e.set_size(offset);
             }
         }
@@ -268,7 +268,7 @@ where IO::Error: 'static {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         trace!("File::read");
         let cluster_size = self.fs.cluster_size();
-        let current_cluster_opt = if self.offset % cluster_size == 0 {
+        let current_cluster_opt = if self.offset.is_multiple_of(cluster_size) {
             // next cluster
             match self.current_cluster {
                 None => self.first_cluster,
@@ -350,7 +350,7 @@ where IO::Error: 'static {
         // Mark the volume 'dirty'
         self.fs.set_dirty_flag(true)?;
         // Get cluster for write possibly allocating new one
-        let current_cluster = if self.offset % cluster_size == 0 {
+        let current_cluster = if self.offset.is_multiple_of(cluster_size) {
             // next cluster
             let next_cluster = match self.current_cluster {
                 None => self.first_cluster,
