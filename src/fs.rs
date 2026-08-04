@@ -1,9 +1,9 @@
 use crate::boot_sector::{format_boot_sector, BiosParameterBlock, BootSector};
 use crate::dir::{Dir, DirRawStream};
 use crate::dir_entry::{DirFileEntryData, FileAttributes, SFN_PADDING, SFN_SIZE};
-use crate::error::{Error, ReadExactError};
+use crate::error::{FatError, ReadExactError};
 use crate::file::File;
-use crate::io::{self, IoBase, Read, ReadLeExt, Seek, SeekFrom, Write, WriteLeExt};
+use crate::io::{self, ErrorType, Read, ReadLeExt, Seek, SeekFrom, Write, WriteLeExt};
 use crate::table::{
     alloc_cluster, count_free_clusters, format_fat, read_fat_flags, ClusterIterator,
     RESERVED_FAT_ENTRIES,
@@ -118,11 +118,11 @@ impl FsStatusFlags {
 
 /// A sum of `Read` and `Seek` traits.
 pub trait ReadSeek: Read + Seek {}
-impl<T: IoBase + Read + Seek> ReadSeek for T {}
+impl<T: ErrorType + Read + Seek> ReadSeek for T {}
 
 /// A sum of `Read`, `Write` and `Seek` traits.
 pub trait ReadWriteSeek: Read + Write + Seek {}
-impl<T: IoBase + Read + Write + Seek> ReadWriteSeek for T {}
+impl<T: ErrorType + Read + Write + Seek> ReadWriteSeek for T {}
 
 #[derive(Clone, Default, Debug)]
 struct FsInfoSector {
@@ -136,22 +136,22 @@ impl FsInfoSector {
     const STRUC_SIG: u32 = 0x6141_7272;
     const TRAIL_SIG: u32 = 0xAA55_0000;
 
-    fn deserialize<R: Read>(rdr: &mut R) -> Result<Self, Error<R::Error>>
+    fn deserialize<R: Read>(rdr: &mut R) -> Result<Self, FatError<R::Error>>
     where
-        Error<<R as IoBase>::Error>: From<ReadExactError<<R as IoBase>::Error>>,
-        <R as IoBase>::Error: From<ReadExactError<<R as IoBase>::Error>>,
+        FatError<<R as ErrorType>::Error>: From<ReadExactError<<R as ErrorType>::Error>>,
+        <R as ErrorType>::Error: From<ReadExactError<<R as ErrorType>::Error>>,
     {
         let lead_sig = rdr.read_u32_le()?;
         if lead_sig != Self::LEAD_SIG {
             error!("invalid lead_sig in FsInfo sector: {}", lead_sig);
-            return Err(Error::CorruptedFileSystem);
+            return Err(FatError::CorruptedFileSystem);
         }
         let mut reserved = [0_u8; 480];
         rdr.read_exact(&mut reserved)?;
         let struc_sig = rdr.read_u32_le()?;
         if struc_sig != Self::STRUC_SIG {
             error!("invalid struc_sig in FsInfo sector: {}", struc_sig);
-            return Err(Error::CorruptedFileSystem);
+            return Err(FatError::CorruptedFileSystem);
         }
         let free_cluster_count = match rdr.read_u32_le()? {
             0xFFFF_FFFF => None,
@@ -172,7 +172,7 @@ impl FsInfoSector {
         let trail_sig = rdr.read_u32_le()?;
         if trail_sig != Self::TRAIL_SIG {
             error!("invalid trail_sig in FsInfo sector: {}", trail_sig);
-            return Err(Error::CorruptedFileSystem);
+            return Err(FatError::CorruptedFileSystem);
         }
         Ok(Self {
             free_cluster_count,
@@ -181,7 +181,7 @@ impl FsInfoSector {
         })
     }
 
-    fn serialize<W: Write + Seek>(&self, wrt: &mut W) -> Result<(), Error<W::Error>> {
+    fn serialize<W: Write + Seek>(&self, wrt: &mut W) -> Result<(), FatError<W::Error>> {
         wrt.write_u32_le(Self::LEAD_SIG)?;
         // let reserved = [0_u8; 480]; // Why do we need to write reserved?
         // Just seek 480 bytes...
@@ -373,7 +373,7 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     pub fn new<T: IntoStorage<IO>>(
         storage: T,
         options: FsOptions<TP, OCC>,
-    ) -> Result<Self, Error<IO::Error>>
+    ) -> Result<Self, FatError<IO::Error>>
     where
         IO::Error: From<ReadExactError<IO::Error>>,
     {
@@ -480,7 +480,8 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
         self.bpb.clusters_from_bytes(bytes)
     }
 
-    fn fat_slice(&self) -> impl ReadWriteSeek<Error = Error<IO::Error>> + '_ {
+    fn fat_slice(&self) -> impl ReadWriteSeek<Error = FatError<IO::Error>> + '_
+    where IO::Error: 'static {
         let io = FsIoAdapter { fs: self };
         fat_slice(io, &self.bpb)
     }
@@ -488,12 +489,14 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     pub(crate) fn cluster_iter(
         &self,
         cluster: u32,
-    ) -> ClusterIterator<impl ReadWriteSeek<Error = Error<IO::Error>> + '_, IO::Error> {
+    ) -> ClusterIterator<impl ReadWriteSeek<Error = FatError<IO::Error>> + '_, IO::Error>
+    where IO::Error: 'static {
         let disk_slice = self.fat_slice();
         ClusterIterator::new(disk_slice, self.fat_type, cluster)
     }
 
-    pub(crate) fn truncate_cluster_chain(&self, cluster: u32) -> Result<(), Error<IO::Error>> {
+    pub(crate) fn truncate_cluster_chain(&self, cluster: u32) -> Result<(), FatError<IO::Error>>
+    where IO::Error: 'static {
         let mut iter = self.cluster_iter(cluster);
         let num_free = iter.truncate()?;
         let mut fs_info = self.fs_info.borrow_mut();
@@ -501,7 +504,8 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
         Ok(())
     }
 
-    pub(crate) fn free_cluster_chain(&self, cluster: u32) -> Result<(), Error<IO::Error>> {
+    pub(crate) fn free_cluster_chain(&self, cluster: u32) -> Result<(), FatError<IO::Error>>
+    where IO::Error: 'static {
         let mut iter = self.cluster_iter(cluster);
         let num_free = iter.free()?;
         let mut fs_info = self.fs_info.borrow_mut();
@@ -513,7 +517,8 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
         &self,
         prev_cluster: Option<u32>,
         zero: bool,
-    ) -> Result<u32, Error<IO::Error>> {
+    ) -> Result<u32, FatError<IO::Error>>
+    where IO::Error: 'static {
         trace!("alloc_cluster");
         let hint = self.fs_info.borrow().next_free_cluster;
         let cluster = {
@@ -542,7 +547,8 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     /// # Errors
     ///
     /// `Error::Io` will be returned if the underlying storage object returned an I/O error.
-    pub fn read_status_flags(&self) -> Result<FsStatusFlags, Error<IO::Error>> {
+    pub fn read_status_flags(&self) -> Result<FsStatusFlags, FatError<IO::Error>>
+    where IO::Error: 'static {
         let bpb_status = self.bpb.status_flags();
         let fat_status = read_fat_flags(&mut self.fat_slice(), self.fat_type)?;
         Ok(FsStatusFlags {
@@ -559,7 +565,8 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     /// # Errors
     ///
     /// `Error::Io` will be returned if the underlying storage object returned an I/O error.
-    pub fn stats(&self) -> Result<FileSystemStats, Error<IO::Error>> {
+    pub fn stats(&self) -> Result<FileSystemStats, FatError<IO::Error>>
+    where IO::Error: 'static {
         let free_clusters_option = self.fs_info.borrow().free_cluster_count;
         let free_clusters = if let Some(n) = free_clusters_option {
             n
@@ -574,7 +581,8 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     }
 
     /// Forces free clusters recalculation.
-    fn recalc_free_clusters(&self) -> Result<u32, Error<IO::Error>> {
+    fn recalc_free_clusters(&self) -> Result<u32, FatError<IO::Error>>
+    where IO::Error: 'static {
         let mut fat = self.fat_slice();
         let free_cluster_count = count_free_clusters(&mut fat, self.fat_type, self.total_clusters)?;
         self.fs_info
@@ -590,17 +598,17 @@ impl<IO: Read + Write + Seek, TP, OCC> FileSystem<IO, TP, OCC> {
     /// # Errors
     ///
     /// `Error::Io` will be returned if the underlying storage object returned an I/O error.
-    pub fn unmount(self) -> Result<(), Error<IO::Error>> {
+    pub fn unmount(self) -> Result<(), FatError<IO::Error>> {
         self.unmount_internal()
     }
 
-    fn unmount_internal(&self) -> Result<(), Error<IO::Error>> {
+    fn unmount_internal(&self) -> Result<(), FatError<IO::Error>> {
         self.flush_fs_info()?;
         self.set_dirty_flag(false)?;
         Ok(())
     }
 
-    fn flush_fs_info(&self) -> Result<(), Error<IO::Error>> {
+    fn flush_fs_info(&self) -> Result<(), FatError<IO::Error>> {
         let mut fs_info = self.fs_info.borrow_mut();
         if self.fat_type == FatType::Fat32 && fs_info.dirty {
             let mut disk = self.disk.borrow_mut();
@@ -683,7 +691,8 @@ impl<IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> FileSystem<IO, TP
     ///
     /// `Error::Io` will be returned if the underlying storage object returned an I/O error.
     #[cfg(feature = "alloc")]
-    pub fn read_volume_label_from_root_dir(&self) -> Result<Option<String>, Error<IO::Error>> {
+    pub fn read_volume_label_from_root_dir(&self) -> Result<Option<String>, FatError<IO::Error>>
+    where IO::Error: 'static {
         // Note: DirEntry::file_short_name() cannot be used because it interprets name as 8.3
         // (adds dot before an extension)
         let volume_label_opt = self.read_volume_label_from_root_dir_as_bytes()?;
@@ -712,7 +721,8 @@ impl<IO: ReadWriteSeek, TP: TimeProvider, OCC: OemCpConverter> FileSystem<IO, TP
     /// `Error::Io` will be returned if the underlying storage object returned an I/O error.
     pub fn read_volume_label_from_root_dir_as_bytes(
         &self,
-    ) -> Result<Option<[u8; SFN_SIZE]>, Error<IO::Error>> {
+    ) -> Result<Option<[u8; SFN_SIZE]>, FatError<IO::Error>>
+    where IO::Error: 'static {
         let entry_opt = self.root_dir().find_volume_entry()?;
         Ok(entry_opt.map(|e| *e.raw_short_name()))
     }
@@ -731,7 +741,7 @@ pub(crate) struct FsIoAdapter<'a, IO: ReadWriteSeek, TP, OCC> {
     fs: &'a FileSystem<IO, TP, OCC>,
 }
 
-impl<IO: ReadWriteSeek, TP, OCC> IoBase for FsIoAdapter<'_, IO, TP, OCC> {
+impl<IO: ReadWriteSeek, TP, OCC> ErrorType for FsIoAdapter<'_, IO, TP, OCC> {
     type Error = IO::Error;
 }
 
@@ -771,7 +781,8 @@ impl<IO: ReadWriteSeek, TP, OCC> Clone for FsIoAdapter<'_, IO, TP, OCC> {
 fn fat_slice<S: ReadWriteSeek, B: BorrowMut<S>>(
     io: B,
     bpb: &BiosParameterBlock,
-) -> impl ReadWriteSeek<Error = Error<S::Error>> {
+) -> impl ReadWriteSeek<Error = FatError<S::Error>>
+where S::Error: 'static {
     let sectors_per_fat = bpb.sectors_per_fat();
     let mirroring_enabled = bpb.mirroring_enabled();
     let (fat_first_sector, mirrors) = if mirroring_enabled {
@@ -840,11 +851,13 @@ impl<B: Clone, S> Clone for DiskSlice<B, S> {
     }
 }
 
-impl<B, S: IoBase> IoBase for DiskSlice<B, S> {
-    type Error = Error<S::Error>;
+impl<B, S: ErrorType> ErrorType for DiskSlice<B, S>
+where S::Error: 'static {
+    type Error = FatError<S::Error>;
 }
 
-impl<B: BorrowMut<S>, S: Read + Seek> Read for DiskSlice<B, S> {
+impl<B: BorrowMut<S>, S: Read + Seek> Read for DiskSlice<B, S>
+where S::Error: 'static {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         let offset = self.begin + self.offset;
         let read_size = cmp::min(self.size - self.offset, buf.len() as u64) as usize;
@@ -855,7 +868,8 @@ impl<B: BorrowMut<S>, S: Read + Seek> Read for DiskSlice<B, S> {
     }
 }
 
-impl<B: BorrowMut<S>, S: Write + Seek> Write for DiskSlice<B, S> {
+impl<B: BorrowMut<S>, S: Write + Seek> Write for DiskSlice<B, S>
+where S::Error: 'static {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         let offset = self.begin + self.offset;
         let write_size = cmp::min(self.size - self.offset, buf.len() as u64) as usize;
@@ -877,7 +891,8 @@ impl<B: BorrowMut<S>, S: Write + Seek> Write for DiskSlice<B, S> {
     }
 }
 
-impl<B, S: IoBase> Seek for DiskSlice<B, S> {
+impl<B, S: ErrorType> Seek for DiskSlice<B, S>
+where S::Error: 'static {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64, Self::Error> {
         let new_offset_opt: Option<u64> = match pos {
             SeekFrom::Current(x) => i64::try_from(self.offset)
@@ -893,14 +908,14 @@ impl<B, S: IoBase> Seek for DiskSlice<B, S> {
         if let Some(new_offset) = new_offset_opt {
             if new_offset > self.size {
                 error!("Seek beyond the end of the file");
-                Err(Error::InvalidInput)
+                Err(FatError::InvalidInput)
             } else {
                 self.offset = new_offset;
                 Ok(self.offset)
             }
         } else {
             error!("Invalid seek offset");
-            Err(Error::InvalidInput)
+            Err(FatError::InvalidInput)
         }
     }
 }
@@ -1162,7 +1177,8 @@ impl FormatVolumeOptions {
 pub fn format_volume<S: ReadWriteSeek>(
     storage: &mut S,
     options: FormatVolumeOptions,
-) -> Result<(), Error<S::Error>> {
+) -> Result<(), FatError<S::Error>>
+where S::Error: 'static {
     trace!("format_volume");
     debug_assert!(storage.seek(SeekFrom::Current(0))? == 0);
 
@@ -1175,7 +1191,7 @@ pub fn format_volume<S: ReadWriteSeek>(
         storage.seek(SeekFrom::Start(0))?;
         if total_sectors_64 > u64::from(u32::MAX) {
             error!("Volume has too many sectors: {}", total_sectors_64);
-            return Err(Error::InvalidInput);
+            return Err(FatError::InvalidInput);
         }
         total_sectors_64 as u32 // safe case: possible overflow is handled above
     };
@@ -1183,7 +1199,7 @@ pub fn format_volume<S: ReadWriteSeek>(
     // Create boot sector, validate and write to storage device
     let (boot, fat_type) = format_boot_sector(&options, total_sectors, bytes_per_sector)?;
     if boot.validate::<S::Error>().is_err() {
-        return Err(Error::InvalidInput);
+        return Err(FatError::InvalidInput);
     }
     boot.serialize(storage)?;
     // Make sure entire logical sector is updated (serialize method always writes 512 bytes)

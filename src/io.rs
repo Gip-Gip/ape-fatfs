@@ -1,9 +1,9 @@
 use crate::error::{ErrorKind, IoError, ReadExactError};
 
-pub use embedded_io::Io as IoBase;
+pub use embedded_io::ErrorType;
 pub use embedded_io::SeekFrom;
 
-pub use embedded_io::blocking::{Read, Seek, Write};
+pub use embedded_io::{Read, Seek, Write};
 
 /// A wrapper struct for types that have implementations for `std::io` traits.
 ///
@@ -110,7 +110,7 @@ impl IoError for StdErrWrapper {
 }
 
 #[cfg(feature = "std")]
-impl<T> IoBase for StdIoWrapper<T> {
+impl<T> ErrorType for StdIoWrapper<T> {
     type Error = StdErrWrapper;
 }
 
@@ -171,9 +171,9 @@ pub(crate) trait ReadLeExt {
 
 impl<T: Read> ReadLeExt for T
 where
-    <T as IoBase>::Error: From<ReadExactError<<T as IoBase>::Error>>,
+    <T as ErrorType>::Error: From<ReadExactError<<T as ErrorType>::Error>>,
 {
-    type Error = <Self as IoBase>::Error;
+    type Error = <Self as ErrorType>::Error;
 
     #[inline]
     fn read_u8(&mut self) -> Result<u8, Self::Error> {
@@ -205,7 +205,7 @@ pub(crate) trait WriteLeExt {
 }
 
 impl<T: Write> WriteLeExt for T {
-    type Error = <Self as IoBase>::Error;
+    type Error = <Self as ErrorType>::Error;
 
     #[inline]
     fn write_u8(&mut self, n: u8) -> Result<(), Self::Error> {

@@ -1,8 +1,8 @@
 use core::fmt::Debug;
-pub use embedded_io::blocking::ReadExactError;
+pub use embedded_io::ReadExactError;
 pub use embedded_io::Error as IoError;
 pub use embedded_io::ErrorKind;
-pub use embedded_io::Io as IoBase;
+pub use embedded_io::ErrorType;
 
 use crate::io::StdErrWrapper;
 
@@ -11,7 +11,7 @@ use crate::io::StdErrWrapper;
 /// Generic parameter `T` is a type of external error returned by the user provided storage
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum Error<T> {
+pub enum FatError<T> {
     /// A user provided storage instance returned an error during an input/output operation.
     Io(T),
     /// A read operation cannot be completed because an end of a file has been reached prematurely.
@@ -36,20 +36,20 @@ pub enum Error<T> {
     UnsupportedFileNameCharacter,
 }
 
-impl<T: Debug> IoError for Error<T> {
+impl<T: core::error::Error + Debug + 'static> IoError for FatError<T> {
     fn kind(&self) -> ErrorKind {
         ErrorKind::Other
     }
 }
 
-impl<T: IoError> From<T> for Error<T> {
+impl<T: IoError> From<T> for FatError<T> {
     fn from(error: T) -> Self {
-        Error::Io(error)
+        FatError::Io(error)
     }
 }
 
-impl<T> From<ReadExactError<Error<T>>> for Error<T> {
-    fn from(error: ReadExactError<Error<T>>) -> Self {
+impl<T> From<ReadExactError<FatError<T>>> for FatError<T> {
+    fn from(error: ReadExactError<FatError<T>>) -> Self {
         match error {
             ReadExactError::UnexpectedEof => Self::UnexpectedEof,
             ReadExactError::Other(error) => error,
@@ -57,7 +57,7 @@ impl<T> From<ReadExactError<Error<T>>> for Error<T> {
     }
 }
 
-impl<T: IoError> From<ReadExactError<T>> for Error<T> {
+impl<T: IoError> From<ReadExactError<T>> for FatError<T> {
     fn from(error: ReadExactError<T>) -> Self {
         match error {
             ReadExactError::UnexpectedEof => Self::UnexpectedEof,
@@ -67,47 +67,46 @@ impl<T: IoError> From<ReadExactError<T>> for Error<T> {
 }
 
 #[cfg(feature = "std")]
-impl From<Error<StdErrWrapper>> for std::io::Error {
-    fn from(error: Error<StdErrWrapper>) -> Self {
+impl From<FatError<StdErrWrapper>> for std::io::Error {
+    fn from(error: FatError<StdErrWrapper>) -> Self {
         match error {
-            Error::Io(io_error) => io_error.into(),
-            Error::UnexpectedEof | Error::NotEnoughSpace => {
+            FatError::Io(io_error) => io_error.into(),
+            FatError::UnexpectedEof | FatError::NotEnoughSpace => {
                 Self::new(std::io::ErrorKind::UnexpectedEof, error)
             }
-            Error::WriteZero => Self::new(std::io::ErrorKind::WriteZero, error),
-            Error::InvalidInput
-            | Error::InvalidFileNameLength
-            | Error::UnsupportedFileNameCharacter
-            | Error::DirectoryIsNotEmpty => Self::new(std::io::ErrorKind::InvalidInput, error),
-            Error::NotFound => Self::new(std::io::ErrorKind::NotFound, error),
-            Error::AlreadyExists => Self::new(std::io::ErrorKind::AlreadyExists, error),
-            Error::CorruptedFileSystem => Self::new(std::io::ErrorKind::InvalidData, error),
+            FatError::WriteZero => Self::new(std::io::ErrorKind::WriteZero, error),
+            FatError::InvalidInput
+            | FatError::InvalidFileNameLength
+            | FatError::UnsupportedFileNameCharacter
+            | FatError::DirectoryIsNotEmpty => Self::new(std::io::ErrorKind::InvalidInput, error),
+            FatError::NotFound => Self::new(std::io::ErrorKind::NotFound, error),
+            FatError::AlreadyExists => Self::new(std::io::ErrorKind::AlreadyExists, error),
+            FatError::CorruptedFileSystem => Self::new(std::io::ErrorKind::InvalidData, error),
         }
     }
 }
 
-impl<T: core::fmt::Display> core::fmt::Display for Error<T> {
+impl<T: core::fmt::Display> core::fmt::Display for FatError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Error::Io(io_error) => write!(f, "IO error: {}", io_error),
-            Error::UnexpectedEof => write!(f, "Unexpected end of file"),
-            Error::NotEnoughSpace => write!(f, "Not enough space"),
-            Error::WriteZero => write!(f, "Write zero"),
-            Error::InvalidInput => write!(f, "Invalid input"),
-            Error::InvalidFileNameLength => write!(f, "Invalid file name length"),
-            Error::UnsupportedFileNameCharacter => write!(f, "Unsupported file name character"),
-            Error::DirectoryIsNotEmpty => write!(f, "Directory is not empty"),
-            Error::NotFound => write!(f, "No such file or directory"),
-            Error::AlreadyExists => write!(f, "File or directory already exists"),
-            Error::CorruptedFileSystem => write!(f, "Corrupted file system"),
+            FatError::Io(io_error) => write!(f, "IO error: {}", io_error),
+            FatError::UnexpectedEof => write!(f, "Unexpected end of file"),
+            FatError::NotEnoughSpace => write!(f, "Not enough space"),
+            FatError::WriteZero => write!(f, "Write zero"),
+            FatError::InvalidInput => write!(f, "Invalid input"),
+            FatError::InvalidFileNameLength => write!(f, "Invalid file name length"),
+            FatError::UnsupportedFileNameCharacter => write!(f, "Unsupported file name character"),
+            FatError::DirectoryIsNotEmpty => write!(f, "Directory is not empty"),
+            FatError::NotFound => write!(f, "No such file or directory"),
+            FatError::AlreadyExists => write!(f, "File or directory already exists"),
+            FatError::CorruptedFileSystem => write!(f, "Corrupted file system"),
         }
     }
 }
 
-#[cfg(feature = "std")]
-impl<T: std::error::Error + 'static> std::error::Error for Error<T> {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        if let Error::Io(io_error) = self {
+impl<T: core::error::Error + 'static> core::error::Error for FatError<T> {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        if let FatError::Io(io_error) = self {
             Some(io_error)
         } else {
             None

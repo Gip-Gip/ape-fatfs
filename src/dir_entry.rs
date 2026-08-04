@@ -9,7 +9,7 @@ use core::str;
 #[cfg(feature = "lfn")]
 use crate::dir::LfnBuffer;
 use crate::dir::{Dir, DirRawStream};
-use crate::error::{Error, IoError, ReadExactError};
+use crate::error::{FatError, IoError, ReadExactError};
 use crate::file::File;
 use crate::fs::{FatType, FileSystem, OemCpConverter, ReadWriteSeek};
 use crate::io::{self, Read, ReadLeExt, Write, WriteLeExt};
@@ -17,7 +17,7 @@ use crate::time::{Date, DateTime};
 
 bitflags! {
     /// A FAT file attributes.
-    #[derive(Default)]
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub struct FileAttributes: u8 {
         const READ_ONLY  = 0x01;
         const HIDDEN     = 0x02;
@@ -25,8 +25,8 @@ bitflags! {
         const VOLUME_ID  = 0x08;
         const DIRECTORY  = 0x10;
         const ARCHIVE    = 0x20;
-        const LFN        = Self::READ_ONLY.bits | Self::HIDDEN.bits
-                         | Self::SYSTEM.bits | Self::VOLUME_ID.bits;
+        const LFN        = Self::READ_ONLY.bits() | Self::HIDDEN.bits()
+                         | Self::SYSTEM.bits() | Self::VOLUME_ID.bits();
     }
 }
 
@@ -365,10 +365,10 @@ pub(crate) enum DirEntryData {
 }
 
 impl DirEntryData {
-    pub(crate) fn serialize<E: IoError, W: Write<Error = Error<E>>>(
+    pub(crate) fn serialize<E: IoError, W: Write<Error = FatError<E>>>(
         &self,
         wrt: &mut W,
-    ) -> Result<(), Error<E>> {
+    ) -> Result<(), FatError<E>> {
         trace!("DirEntryData::serialize");
         match self {
             DirEntryData::File(file) => file.serialize(wrt),
@@ -376,9 +376,9 @@ impl DirEntryData {
         }
     }
 
-    pub(crate) fn deserialize<E: IoError, R: Read<Error = Error<E>>>(
+    pub(crate) fn deserialize<E: IoError, R: Read<Error = FatError<E>>>(
         rdr: &mut R,
-    ) -> Result<Self, Error<E>>
+    ) -> Result<Self, FatError<E>>
     where
         R::Error: From<ReadExactError<R::Error>>,
     {
